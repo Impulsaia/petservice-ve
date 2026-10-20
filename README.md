@@ -1,8 +1,8 @@
 # 🐾 PetService VE
 
-**Marketplace de servicios a domicilio para mascotas ** 🇻🇪
+**Marketplace de servicios a domicilio para mascotas en toda Venezuela** 🇻🇪
 
-Peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi y spa móvil — con **prestadores verificados**, pagos en **USD y Bs.** (Pago Móvil, transferencia, Zelle, Binance, efectivo) y **IA** en todo el producto.
+Peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi, spa móvil y **veterinaria** — con **prestadores verificados**, pagos en **USD y Bs.** (Pago Móvil, transferencia, Zelle, Binance, efectivo) y **IA (Firulais 🐕)** en todo el producto.
 
 ---
 
@@ -10,15 +10,16 @@ Peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramient
 
 | Área | Detalle |
 |---|---|
-| 🛒 **Marketplace** | Búsqueda por radio (Haversine), 7 categorías, filtros (mascota, rating, verificados), orden por distancia/precio, tarjetas con precio dual USD/Bs. |
-| 🗺️ **Mapas por ciudad** | Mapas SVG estilizados de Puerto Ordaz, **San Félix**, Ciudad Bolívar y Upata con ríos (Caroní, Orinoco), represas (Macagua, Caruachi), avenidas y pines de prestadores. |
+| 🇻🇪 **Cobertura nacional** | Selector Estado → Ciudad con **29 ciudades de Venezuela** (Caracas, Maracaibo, Valencia, Barquisimeto…). Estados vacíos con «¡Sé el primero!». Chips rápidos de las ciudades activas. |
+| 🛒 **Marketplace** | Búsqueda por radio (Haversine), 8 categorías, filtros (mascota, rating, verificados), orden por distancia/precio, tarjetas con precio dual USD/Bs. |
+| 🗺️ **Mapa interactivo** | Mapa propio con pines por categoría, gestos táctiles (pan, pinch-zoom, tap para buscar), sectores por ciudad desde la base de datos y etiquetas al hacer zoom. |
 | 📅 **Reservas** | Wizard de 5 pasos, slots según horario del prestador, extras, dirección por zona, notas de mascota. |
 | 💳 **Pagos VE** | Pago Móvil / Transferencia / Zelle / Binance / Efectivo con referencia, conciliación por el admin (escrow lógico), precios dual USD ↔ Bs. a tasa configurable. |
-| 🧑‍🎨 **Panel del prestador** | KPIs de negocio, iniciar/completar servicio con evidencia, responder reseñas, verificación de identidad, **Consultas IA de su propio negocio**. |
-| 🛡️ **Panel admin** | GMV, comisión, conversión, gráfico 7 días, conciliación de pagos, verificación de prestadores, moderación de reseñas, log de WhatsApp simulado, configuración de tasa/comisión, **Consultas IA del marketplace**. |
-| 🤖 **IA** | Chat "Toby" con guardrails (no consejos veterinarios, no inventa precios, catálogo real inyectado), búsqueda semántica en criollo ("pelu pa' mi michi en El Roble" → filtros) y consultas de datos en lenguaje natural sin SQL crudo. |
-| 🔔 **Notificaciones** | Centro estilo WhatsApp para el cliente + log auditado de plantillas (confirmación, pago verificado, recordatorio 24 h). |
-| 🔐 **Seguridad** | Sesiones HMAC-SHA256 en cookie HttpOnly, contraseñas scrypt, rate limiting, verificación de Origin (anti-CSRF), ownership anti-IDOR, guardas de rol, límite de tamaño de cuerpo, cabeceras endurecidas. |
+| 🧑‍🎨 **Panel del prestador (CRM)** | KPIs de negocio, **CRUD de servicios con precios**, **CRM de clientes** (estados VIP/activo, historial, WhatsApp), **calendario mensual** (reservas + eventos manuales), reservas con filtros, reseñas y Consultas IA. |
+| 🛡️ **Panel admin (12 tabs)** | **Usuarios** (activar/roles/reset de contraseña), **servicios de todos los prestadores**, **reservas con filtros profesionales**, **sectores CRUD** (alimentan el marketplace), **entrenador de Firulais** con simulador, pagos, reseñas, WhatsApp, métricas y configuración. |
+| 👩 **Clientes** | **Mis Mascotas profesional** (edad, peso, especie, filtros y búsqueda), reservas con filtros, notificaciones y reseñas. |
+| 🤖 **IA (Firulais 🐕)** | Base de conocimiento **entrenable desde el admin** (pregunta-respuesta con keywords + simulador + log de preguntas sin matchear), guardrails veterinarios, búsqueda semántica en criollo ("pelu pa' mi michi en El Roble") y consultas de datos en lenguaje natural. |
+| 🔐 **Login robusto** | **Recuperación de contraseña** por token (30 min), **OAuth con Google** (activable con `GOOGLE_CLIENT_ID/SECRET`), sesiones HMAC-SHA256 HttpOnly, scrypt, rate limiting, anti-CSRF/IDOR y cuentas desactivables. |
 
 ## 🧪 Cuentas demo
 
