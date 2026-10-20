@@ -180,3 +180,39 @@
 .animate-wiggle:hover {
   animation: wiggle 0.5s ease-in-out;
 }
+
+/* ─── Leaflet / OpenStreetMap (mapa real) ─── */
+.leaflet-container {
+  font-family: inherit;
+  background: #e7efe9;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 14px;
+  box-shadow: 0 8px 24px -6px oklch(0.3 0.03 60 / 0.2);
+}
+.leaflet-popup-content {
+  margin: 12px 14px;
+  line-height: 1.35;
+}
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 8px 0 0 0;
+}
+.dark .leaflet-control-attribution {
+  background: rgba(12, 20, 18, 0.85) !important;
+  color: #a1a1aa;
+}
+.dark .leaflet-control-attribution a {
+  color: #5eead4;
+}
+.leaflet-bar a {
+  border-radius: 8px !important;
+}
+/* Modo oscuro: filtra los tiles de OpenStreetMap a un tema oscuro legible */
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(185deg) saturate(0.55) brightness(0.92) contrast(0.92);
+}
+.dark .leaflet-container {
+  background: #0c1412;
+}

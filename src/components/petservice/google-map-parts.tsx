@@ -35,6 +35,7 @@ import {
   VENEZUELA_CENTER,
 } from "@/lib/petservice/google-maps";
 import { MapPanel, type MapSectorPin, type ProviderListItem } from "@/components/petservice/marketplace-parts";
+import { OsmMapPanel } from "@/components/petservice/osm-map-parts";
 
 // ───────────────────────── GoogleMapPanel ─────────────────────────
 
@@ -591,9 +592,12 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
 
 /**
  * Elige el motor del mapa:
- * - "google" si hay clave (Settings.gmapsApiKey o NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)
- * - "classic" (MapPanel SVG) como respaldo — sin clave, o si el usuario lo elige
- *   tras un error (solo durante la sesión de la página; al recargar se reintenta)
+ * - "google" SOLO si hay clave (Settings.gmapsApiKey o NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)
+ *   — requiere facturación en Google Cloud (tarjeta de crédito)
+ * - "osm" (OpenStreetMap + Leaflet) por defecto — mapa real 100% gratis,
+ *   sin tarjeta, sin clave: la experiencia tipo Google sin costos
+ * - "classic" (MapPanel SVG) como respaldo si el usuario lo elige tras un
+ *   error (solo durante la sesión de la página; al recargar se reintenta)
  */
 export function SmartMapPanel({
   gmapsKey,
@@ -613,6 +617,10 @@ export function SmartMapPanel({
         {...props}
       />
     );
+  }
+  // Sin clave de Google (o tras un error): mapa real OpenStreetMap — gratis
+  if (!forcedClassic) {
+    return <OsmMapPanel onFallback={() => setForcedClassic(true)} {...props} />;
   }
   return <MapPanel {...props} />;
 }
