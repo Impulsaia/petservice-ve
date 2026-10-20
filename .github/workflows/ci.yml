@@ -11,7 +11,7 @@ jobs:
     name: Lint + Build
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: "file:./db/ci.db"
+      DATABASE_URL: "file:/tmp/ci.db"
       AUTH_SECRET: "ci-secret-solo-para-pruebas-no-usar-en-produccion"
     steps:
       - uses: actions/checkout@v4
