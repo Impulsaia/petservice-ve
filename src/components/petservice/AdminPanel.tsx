@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import {
   BadgeCheck, Wallet, ShieldAlert, MessageSquareQuote, Settings2, TrendingUp, Sparkles,
   Check, X, Ban, RotateCcw, EyeOff, Eye, Save, Users, Store, CalendarDays, MapPinned,
-  Dog, Zap, RefreshCcw, Landmark,
+  Dog, Zap, RefreshCcw, Landmark, Globe,
 } from "lucide-react";
 import type { AppSettings } from "@/lib/petservice/store";
 import { apiGet, apiPost, apiPatch } from "@/lib/petservice/api";
@@ -565,6 +565,21 @@ async function apiPutSettings(usdToBs: number, commissionPct: number, autoRate?:
   return res.json() as Promise<{ settings: AppSettings }>;
 }
 
+/** Guarda (o elimina con null) la clave de Google Maps */
+async function apiPutGmapsKey(settings: AppSettings, key: string | null): Promise<AppSettings> {
+  const res = await fetch("/api/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usdToBs: settings.usdToBs, commissionPct: settings.commissionPct, gmapsApiKey: key ?? "" }),
+  });
+  if (!res.ok) {
+    const e = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(e?.error ?? "No se pudo guardar la clave");
+  }
+  const d = (await res.json()) as { settings: AppSettings };
+  return d.settings;
+}
+
 const FUENTE_LABEL: Record<string, string> = {
   "bcv-dolarapi": "BCV oficial · dolarapi",
   "bcv-pydolarve": "BCV oficial · pydolarve",
@@ -582,6 +597,21 @@ function SettingsForm({ settings, onSaved, onSynced }: {
   const [commInput, setCommInput] = useState(String(settings.commissionPct));
   const [autoRate, setAutoRate] = useState(settings.autoRate ?? true);
   const [syncing, setSyncing] = useState(false);
+  const [keyInput, setKeyInput] = useState(settings.gmapsApiKey ?? "");
+  const [savingKey, setSavingKey] = useState(false);
+
+  async function saveKey(v: string | null) {
+    setSavingKey(true);
+    try {
+      const s = await apiPutGmapsKey(settings, v);
+      onSaved(s);
+      toast.success(v ? "Clave de Google Maps guardada 🗺️ (recarga el marketplace)" : "Clave eliminada: se usa el mapa clásico");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar la clave");
+    } finally {
+      setSavingKey(false);
+    }
+  }
 
   async function save() {
     try {
@@ -676,6 +706,58 @@ function SettingsForm({ settings, onSaved, onSynced }: {
           <RefreshCcw className={cn("h-4 w-4", syncing && "animate-spin")} />
           {syncing ? "Sincronizando con BCV…" : "Sincronizar ahora"}
         </Button>
+      </div>
+
+      {/* ── Google Maps (vista de prueba) ── */}
+      <div className="mt-5 rounded-2xl border border-primary/40 bg-primary/5 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="flex items-center gap-1.5 font-display text-sm font-extrabold">
+              <Globe className="h-4 w-4 text-primary" /> Google Maps · mapa real
+            </h4>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              Pega tu clave de <strong>Maps JavaScript API</strong> para reemplazar el mapa del marketplace por Google Maps filtrado a servicios de mascotas. Requiere además <strong>Places API (New)</strong> activa en Google Cloud.
+            </p>
+          </div>
+          <Badge variant={settings.gmapsApiKey ? "default" : "secondary"} className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold">
+            {settings.gmapsApiKey ? "Google activo" : "Mapa clásico"}
+          </Badge>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Input
+            type="text"
+            placeholder="AIza… (pega tu clave completa)"
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            className="rounded-xl font-mono text-xs"
+            aria-label="Clave de Google Maps"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <Button
+            onClick={() => saveKey(keyInput.trim())}
+            disabled={savingKey || keyInput.trim() === (settings.gmapsApiKey ?? "") || keyInput.trim() === ""}
+            className="shrink-0 rounded-xl bg-primary font-bold"
+          >
+            {savingKey ? "Guardando…" : "Guardar"}
+          </Button>
+        </div>
+        {settings.gmapsApiKey && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setKeyInput("");
+              saveKey(null);
+            }}
+            disabled={savingKey}
+            className="mt-2 w-full rounded-xl font-bold"
+          >
+            Quitar clave y volver al mapa clásico
+          </Button>
+        )}
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/80">
+          Recomendado: en Google Cloud restringe la clave por <strong>referrer HTTP</strong> (localhost:3000/* y https://petservice-ve.vercel.app/*). La clave viaja al navegador por diseño; la protección real es la restricción de dominio + cuotas.
+        </p>
       </div>
     </div>
   );

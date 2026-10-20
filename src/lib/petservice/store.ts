@@ -26,6 +26,7 @@ export interface AppSettings {
   usdToBsSource?: string;
   usdToBsUpdatedAt?: string | null;
   autoRate?: boolean;
+  gmapsApiKey?: string | null;
 }
 
 export interface SessionUser {

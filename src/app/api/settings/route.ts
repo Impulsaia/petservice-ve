@@ -3,12 +3,18 @@ import { db } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson } from "@/lib/petservice/auth";
 import { syncRateIfNeeded, rateView } from "@/lib/petservice/rate";
 
-/** GET /api/settings — configuración pública (tasa BCV auto-actualizada, comisión) */
+/** GET /api/settings — configuración pública (tasa BCV auto-actualizada, comisión, Google Maps) */
 export async function GET() {
   const s = await syncRateIfNeeded(); // refresca desde BCV si autoRate y >1h (throttle 10 min)
   if (!s) return NextResponse.json({ error: "Settings no inicializadas" }, { status: 404 });
   return NextResponse.json({
-    settings: { ...rateView(s), commissionPct: s.commissionPct, defaultRadiusKm: s.defaultRadiusKm },
+    settings: {
+      ...rateView(s),
+      commissionPct: s.commissionPct,
+      defaultRadiusKm: s.defaultRadiusKm,
+      // Clave de Maps JavaScript API: es pública por diseño (se restringe por referrer en Google Cloud)
+      gmapsApiKey: s.gmapsApiKey ?? null,
+    },
   });
 }
 
@@ -43,8 +49,23 @@ export async function PUT(req: Request) {
   // Toggle de actualización automática BCV
   if (typeof body.autoRate === "boolean") data.autoRate = body.autoRate;
 
+  // Clave de Google Maps (string "AIza…" o null/"" para volver al mapa clásico)
+  if ("gmapsApiKey" in body) {
+    const raw = body.gmapsApiKey;
+    const key = typeof raw === "string" ? raw.trim() : "";
+    if (key && !/^AIza[A-Za-z0-9_-]{30,}$/.test(key)) {
+      return NextResponse.json({ error: "La clave de Google Maps debe empezar con AIza… (cópiala completa desde Google Cloud)" }, { status: 400 });
+    }
+    data.gmapsApiKey = key || null;
+  }
+
   const s = await db.settings.update({ where: { id: "main" }, data });
   return NextResponse.json({
-    settings: { ...rateView(s), commissionPct: s.commissionPct, defaultRadiusKm: s.defaultRadiusKm },
+    settings: {
+      ...rateView(s),
+      commissionPct: s.commissionPct,
+      defaultRadiusKm: s.defaultRadiusKm,
+      gmapsApiKey: s.gmapsApiKey ?? null,
+    },
   });
 }

@@ -201,6 +201,7 @@ model Settings {
   usdToBsSource    String    @default("manual")
   usdToBsUpdatedAt DateTime?
   autoRate         Boolean   @default(true)
+  gmapsApiKey      String?
 }
 
 // ─────────────────────── Recuperación de contraseña ───────────────────────

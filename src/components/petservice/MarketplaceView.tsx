@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 import { apiGet, apiPost } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
 import { CATEGORIES, ZONES, type CategoryKey } from "@/lib/petservice/constants";
-import { ProviderCard, ProviderCardSkeleton, MapPanel, type ProviderListItem } from "@/components/petservice/marketplace-parts";
+import { ProviderCard, ProviderCardSkeleton, type ProviderListItem } from "@/components/petservice/marketplace-parts";
+import { SmartMapPanel } from "@/components/petservice/google-map-parts";
 import { toast } from "sonner";
 
 // ─────────────── Alcance nacional: ciudades y sectores (DB) ───────────────
@@ -655,11 +656,12 @@ export function MarketplaceView() {
         <aside ref={mapAsideRef} className={cn("scroll-mt-20 md:block", mobileTab === "map" ? "block" : "hidden")}>
           <div className="md:sticky md:top-24 h-fit">
             <div className="h-[min(72svh,640px)] md:h-auto">
-              <MapPanel
+              <SmartMapPanel
+                gmapsKey={settings?.gmapsApiKey ?? null}
                 providers={vacantCity ? [] : providers ?? []}
                 rate={settings?.usdToBs ?? 40}
                 sector={selectedSector ? { name: selectedSector.name, zone: selectedSector.zone, lat: selectedSector.lat, lng: selectedSector.lng } : null}
-                vacant={vacantCity ? { name: vacantCity.name, state: vacantCity.state } : null}
+                vacant={vacantCity ? { name: vacantCity.name, state: vacantCity.state, lat: vacantCity.lat, lng: vacantCity.lng } : null}
               />
             </div>
             <div className="mt-3 hidden grid-cols-3 gap-2 md:grid">
