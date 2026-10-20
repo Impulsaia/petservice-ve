@@ -76,7 +76,7 @@ const defaultFilters: Filters = {
   radiusKm: 8,
   minRating: 0,
   petType: null,
-  onlyVerified: false,
+  onlyVerified: true,
   sort: "distance",
 };
 

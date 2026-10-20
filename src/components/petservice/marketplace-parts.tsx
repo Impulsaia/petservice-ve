@@ -23,6 +23,7 @@ export interface ProviderListItem {
   ratingAvg: number;
   ratingCount: number;
   badges: string;
+  status?: string;
   distanceKm: number | null;
   minPriceUsd: number | null;
   serviceCategories: string[];
@@ -49,9 +50,13 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h3 className="truncate font-display text-base font-extrabold">{p.businessName}</h3>
-            {p.badges.includes("VERIFICADO") && (
+            {p.status === "VERIFIED" || p.badges.includes("VERIFICADO") ? (
               <span title="Prestador verificado" className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                 ✔
+              </span>
+            ) : (
+              <span title="Pendiente de verificación" className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                Sin verificar
               </span>
             )}
           </div>

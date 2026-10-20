@@ -52,7 +52,7 @@ const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "
 interface UpcomingRowData { key: string; date: string; time: string; title: string; type: string; status: string; sub: string; }
 
 export function ProviderDashboard() {
-  const { bumpData, settings } = useAppStore();
+  const { bumpData, settings, setSettings } = useAppStore();
   const rate = settings?.usdToBs ?? 40;
   const [tab, setTab] = useState("resumen");
 
@@ -181,6 +181,10 @@ export function ProviderDashboard() {
     loadServices();
     loadEvents();
     loadProfile();
+    // Settings frescas al abrir el panel (la tasa puede cambiar en Config)
+    apiGet<{ settings: { usdToBs: number; commissionPct: number; defaultRadiusKm: number } }>("/api/settings")
+      .then((d) => d.settings && setSettings(d.settings))
+      .catch(() => {});
   }, [loadBookings, loadServices, loadEvents, loadProfile, bumpData]);
 
   // CRM con debounce (búsqueda) + recarga tras mutaciones (cRefresh)

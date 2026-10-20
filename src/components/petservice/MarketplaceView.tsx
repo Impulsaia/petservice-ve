@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
-import { CATEGORIES, ZONES, CITIES, type CategoryKey } from "@/lib/petservice/constants";
+import { CATEGORIES, ZONES, type CategoryKey } from "@/lib/petservice/constants";
 import { ProviderCard, ProviderCardSkeleton, MapPanel, type ProviderListItem } from "@/components/petservice/marketplace-parts";
 import { toast } from "sonner";
 
@@ -59,6 +59,7 @@ export function MarketplaceView() {
   const [sectors, setSectors] = useState<SectorInfo[]>([]);
   const [selectedSector, setSelectedSector] = useState<SectorInfo | null>(null);
   const [citiesOpen, setCitiesOpen] = useState(false);
+  const [sectorsOpen, setSectorsOpen] = useState(false);
   const [cityQuery, setCityQuery] = useState("");
 
   // Ciudades: al montar y cada vez que se abre el popover (mantiene contadores frescos)
@@ -149,11 +150,12 @@ export function MarketplaceView() {
   }
 
   function goBackToBolivar() {
-    const active = cities?.find((c) => c.providerCount > 0);
-    const target = active?.name ?? "Puerto Ordaz";
+    const active = cities?.filter((c) => c.providerCount > 0);
+    // Preferimos Puerto Ordaz (sede principal); si no, la primera activa
+    const target = active?.find((c) => c.name === "Puerto Ordaz")?.name ?? active?.[0]?.name ?? "Puerto Ordaz";
     setSelectedSector(null);
     setFilters({ zone: null });
-    setCity(target, centerForCity(target, active ?? undefined));
+    setCity(target, centerForCity(target, active?.find((c) => c.name === target) ?? undefined));
   }
 
   // En móvil, al cambiar a la pestaña "Mapa", desplaza suavemente hasta el mapa
@@ -260,7 +262,7 @@ export function MarketplaceView() {
   }
 
   const activeFilters =
-    (filters.category ? 1 : 0) + (filters.petType ? 1 : 0) + (filters.minRating ? 1 : 0) + (filters.onlyVerified ? 1 : 0) + (filters.q ? 1 : 0);
+    (filters.category ? 1 : 0) + (filters.petType ? 1 : 0) + (filters.minRating ? 1 : 0) + (filters.q ? 1 : 0);
 
   return (
     <div className="space-y-8">
@@ -326,37 +328,19 @@ export function MarketplaceView() {
               </div>
             </form>
 
+            {/* Barra de ubicación compacta: dropdown de Ciudad + dropdown de Sector + GPS.
+                Reemplaza los chips individuales para evitar el exceso de botones. */}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-white/70">Ciudad:</span>
-              {CITIES.map((c) => {
-                const z = ZONES.find((zz) => zz.city === c.name);
-                return (
-                  <button
-                    key={c.name}
-                    onClick={() => {
-                      setSelectedSector(null);
-                      setCity(c.name, z ? { label: z.name, lat: z.lat, lng: z.lng } : undefined);
-                      setFilters({ zone: null });
-                    }}
-                    className={cn(
-                      "rounded-xl px-2.5 py-1.5 font-bold backdrop-blur transition-all",
-                      city === c.name ? "bg-accent text-accent-foreground shadow" : "bg-white/15 text-white hover:bg-white/25"
-                    )}
-                  >
-                    {c.emoji} {c.name}
-                  </button>
-                );
-              })}
-
-              {/* Cambiar ubicación: 29 ciudades de Venezuela (Estado → Ciudad) */}
+              {/* Ciudad: las 29 ciudades de Venezuela, agrupadas por estado y con buscador */}
               <Popover open={citiesOpen} onOpenChange={setCitiesOpen}>
                 <PopoverTrigger asChild>
                   <button
-                    className="inline-flex items-center gap-1 rounded-xl bg-white/15 px-2.5 py-1.5 font-bold text-white backdrop-blur transition-colors hover:bg-white/25"
-                    aria-label="Cambiar ubicación: buscar en otra ciudad de Venezuela"
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 font-bold text-white backdrop-blur transition-colors hover:bg-white/25"
+                    aria-label={`Ciudad activa: ${city}. Elegir otra ciudad de Venezuela`}
                   >
-                    <Globe className="h-3.5 w-3.5" /> Cambiar ubicación
-                    <ChevronDown className={cn("h-3 w-3 transition-transform", citiesOpen && "rotate-180")} />
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    <span className="max-w-[170px] truncate">{city}</span>
+                    <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform", citiesOpen && "rotate-180")} />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-[min(92vw,340px)] rounded-2xl p-0 shadow-xl" role="dialog" aria-label="Cambiar ubicación">
@@ -409,39 +393,79 @@ export function MarketplaceView() {
                 </PopoverContent>
               </Popover>
 
-              <button onClick={useGps} className="inline-flex items-center gap-1 rounded-xl bg-white/15 px-2.5 py-1.5 font-bold text-white backdrop-blur transition-colors hover:bg-white/25">
-                <MapPin className="h-3.5 w-3.5" /> Usar mi ubicación
+              {/* Sector: lista desplegable con los sectores de la ciudad activa */}
+              <Popover open={sectorsOpen} onOpenChange={setSectorsOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    disabled={sectors.length === 0}
+                    className={cn(
+                      "inline-flex max-w-full items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold backdrop-blur transition-colors",
+                      selectedSector
+                        ? "bg-accent text-accent-foreground shadow"
+                        : "bg-white/15 text-white hover:bg-white/25",
+                      sectors.length === 0 && "cursor-not-allowed opacity-50"
+                    )}
+                    aria-label={selectedSector ? `Sector activo: ${selectedSector.name}. Elegir otro sector` : "Elegir sector (todos por defecto)"}
+                  >
+                    <span className="shrink-0">🏘️</span>
+                    <span className="max-w-[150px] truncate">{selectedSector ? selectedSector.name : "Todos los sectores"}</span>
+                    <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform", sectorsOpen && "rotate-180")} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[min(92vw,300px)] rounded-2xl p-0 shadow-xl" role="dialog" aria-label="Elegir sector">
+                  <p className="border-b border-border/60 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                    Sectores de {city}
+                  </p>
+                  <div className="scroll-slim max-h-[260px] overflow-y-auto p-2">
+                    <button
+                      onClick={() => {
+                        clearSector();
+                        setSectorsOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-secondary"
+                      aria-label="Buscar en toda la ciudad"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <span className="truncate text-sm font-bold">Toda la ciudad</span>
+                      </span>
+                      {!selectedSector && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
+                    </button>
+                    {sectors.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          selectSector(s);
+                          setSectorsOpen(false);
+                        }}
+                        title={`Zona ${s.zone ?? "—"} · ${s.cityName}`}
+                        className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-secondary"
+                        aria-label={`Sector ${s.name}${s.zone ? `, zona ${s.zone}` : ""}`}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="shrink-0">🏘️</span>
+                          <span className="truncate text-sm font-bold">{s.name}</span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {s.zone && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">Zona {s.zone}</span>
+                          )}
+                          {selectedSector?.id === s.id && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <button
+                onClick={useGps}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 font-bold text-white backdrop-blur transition-colors hover:bg-white/25"
+                aria-label="Usar mi ubicación GPS"
+              >
+                <Globe className="h-3.5 w-3.5" /> Mi ubicación
               </button>
             </div>
-
-            {/* Sectores desde la DB (bajo los chips de ciudad) */}
-            {sectors.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-white/70">Sector:</span>
-                <button
-                  onClick={clearSector}
-                  className={cn(
-                    "rounded-xl px-2.5 py-1.5 font-bold backdrop-blur transition-all",
-                    !selectedSector ? "bg-accent text-accent-foreground shadow" : "bg-white/15 text-white hover:bg-white/25"
-                  )}
-                >
-                  Todos
-                </button>
-                {sectors.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => selectSector(s)}
-                    title={`Zona ${s.zone ?? "—"} · ${s.cityName}`}
-                    className={cn(
-                      "rounded-xl px-2.5 py-1.5 font-bold backdrop-blur transition-all",
-                      selectedSector?.id === s.id ? "bg-accent text-accent-foreground shadow" : "bg-white/15 text-white hover:bg-white/25"
-                    )}
-                  >
-                    🏘️ {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Ilustración hero */}

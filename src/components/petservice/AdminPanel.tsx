@@ -80,7 +80,12 @@ export function AdminPanel() {
     apiGet<{ payments: PaymentRow[] }>("/api/admin/payments").then((d) => setPayments(d.payments)).catch(() => setPayments([]));
     apiGet<{ reviews: ReviewRow[] }>("/api/admin/reviews").then((d) => setReviews(d.reviews)).catch(() => setReviews([]));
     apiGet<{ notifications: NotifRow[] }>("/api/admin/notifications").then((d) => setNotifs(d.notifications)).catch(() => setNotifs([]));
-  }, []);
+    // Settings SIEMPRE frescas: el caché del store puede estar desactualizado
+    // (otra sesión/admin pudo cambiar la tasa) y el form de Config pisa valores.
+    apiGet<{ settings: { usdToBs: number; commissionPct: number; defaultRadiusKm: number } }>("/api/settings")
+      .then((d) => d.settings && setSettings(d.settings))
+      .catch(() => {});
+  }, [setSettings]);
 
   useEffect(() => {
     load();

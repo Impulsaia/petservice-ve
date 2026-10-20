@@ -63,6 +63,7 @@ export async function GET(req: Request) {
         ratingAvg: p.ratingAvg,
         ratingCount: p.ratingCount,
         badges: p.badges,
+        status: p.status,
         distanceKm,
         serviceCount: p.services.length,
         serviceCategories: [...new Set(p.services.map((s) => s.category))],

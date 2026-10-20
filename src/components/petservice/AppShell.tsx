@@ -42,6 +42,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .catch(() => toast.error("No se pudo cargar la configuración inicial"));
   }, [setSettings, setUser, setAuthLoaded]);
 
+  // Aviso OAuth: /?loginError=google_no_configurado llega al HOME tras el redirect.
+  // Lo procesamos aquí (una sola vez): abrimos el login y limpiamos la URL.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("loginError") === "google_no_configurado") {
+        params.delete("loginError");
+        const qs = params.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+        setView("login");
+        toast.info("Google aún no está configurado en esta demo — entra con tu correo o prueba las cuentas demo 🐾");
+      }
+    } catch {
+      /* entorno sin history (raro) — ignorar */
+    }
+  }, [setView]);
+
   async function logout() {
     try {
       await apiPost("/api/auth/logout", {});
