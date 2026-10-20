@@ -1,0 +1,184 @@
+// PetService VE — Modelo de datos
+// Marketplace de servicios a domicilio para mascotas (Venezuela)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────── Usuarios ──────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?
+  name         String
+  role         String   @default("CLIENT") // CLIENT | PROVIDER | ADMIN
+  passwordHash String   @default("") // scrypt: s2:<saltB64>:<hashB64>
+  createdAt    DateTime @default(now())
+
+  provider       Provider?
+  pets           Pet[]
+  clientBookings Booking[] @relation("ClientBookings")
+}
+
+// ────────────────────────────── Prestadores ──────────────────────────────
+
+model Provider {
+  id           String @id @default(cuid())
+  userId       String @unique
+  user         User   @relation(fields: [userId], references: [id])
+  businessName String
+  bio          String
+  // PENDING | VERIFIED | REJECTED | SUSPENDED
+  status       String @default("PENDING")
+  city         String
+  zoneName     String // municipio / parroquia (ej: Chacao, El Cafetal)
+  lat          Float
+  lng          Float
+  radiusKm     Float  @default(5)
+  // {"1":[["08:00","12:00"],["14:00","18:00"]], ...} (1=Lunes … 7=Domingo)
+  scheduleJson String @default("{}")
+  ratingAvg    Float  @default(0)
+  ratingCount  Int    @default(0)
+  // badges separados por coma: VERIFICADO, TOP, EXPRESS, GATOS
+  badges       String @default("")
+
+  services Service[]
+  bookings Booking[]
+  reviews  Review[]
+}
+
+// ────────────────────────────── Servicios ──────────────────────────────
+
+model Service {
+  id          String @id @default(cuid())
+  providerId  String
+  provider    Provider @relation(fields: [providerId], references: [id])
+  // GROOMING | DELIVERY | PET_SITTING | DOG_WALKING | TRAINING | PET_TAXI | SPA_MOVIL | VET
+  category    String
+  name        String
+  description String
+  durationMin Int
+  priceUsd    Float
+  // DOMICILIO | PICKUP | ONLINE
+  modality    String @default("DOMICILIO")
+  petTypes    String @default("PERRO,GATO") // separado por coma
+  petSizes    String @default("S,M,L")
+  // [{"name":"Corte de uñas","usd":3}, ...]
+  extrasJson  String @default("[]")
+  active      Boolean @default(true)
+
+  bookings Booking[]
+}
+
+// ────────────────────────────── Mascotas ──────────────────────────────
+
+model Pet {
+  id      String @id @default(cuid())
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+  name    String
+  // PERRO | GATO | OTRO
+  species String
+  breed   String?
+  // S | M | L
+  size    String
+  notes   String?
+
+  bookings Booking[]
+}
+
+// ────────────────────────────── Reservas ──────────────────────────────
+
+model Booking {
+  id         String @id @default(cuid())
+  code       String @unique
+  clientId   String
+  client     User   @relation("ClientBookings", fields: [clientId], references: [id])
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id])
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id])
+  petId      String
+  pet        Pet      @relation(fields: [petId], references: [id])
+
+  address      String
+  scheduledAt  DateTime
+  // PENDIENTE_PAGO | CONFIRMADA | EN_CURSO | COMPLETADA | CANCELADA
+  status       String @default("PENDIENTE_PAGO")
+  priceUsd     Float
+  priceBs      Float
+  commissionUsd Float
+  extrasJson   String @default("[]")
+  notes        String?
+  evidenceNote String?
+
+  createdAt DateTime @default(now())
+
+  payment Payment?
+  review  Review?
+}
+
+// ────────────────────────────── Pagos ──────────────────────────────
+
+model Payment {
+  id        String @id @default(cuid())
+  bookingId String @unique
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  // PAGO_MOVIL | TRANSFERENCIA | ZELLE | BINANCE | EFECTIVO
+  method    String
+  amountUsd Float
+  amountBs  Float
+  // referencia (Pago Móvil / transferencia) | comprobante (Zelle) | TXID (Binance)
+  reference String?
+  // PENDIENTE | VERIFICADO | RECHAZADO
+  status    String  @default("PENDIENTE")
+  reconciledBy String?
+  createdAt DateTime @default(now())
+}
+
+// ────────────────────────────── Reseñas ──────────────────────────────
+
+model Review {
+  id         String @id @default(cuid())
+  bookingId  String? @unique
+  booking    Booking? @relation(fields: [bookingId], references: [id])
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id])
+  authorName String
+  rating     Int // 1..5
+  comment    String
+  // PUNTUALIDAD,TRATO,PRECIO,LIMPIEZA (separado por coma)
+  tags       String  @default("")
+  response   String? // respuesta del prestador
+  hidden     Boolean @default(false)
+  createdAt  DateTime @default(now())
+}
+
+// ─────────────────────── Notificaciones (WhatsApp simulado + in-app) ───────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  channel   String   @default("WHATSAPP") // WHATSAPP | INAPP
+  template  String // CONFIRMACION_RESERVA, PAGO_VERIFICADO, RECORDATORIO_24H, ESTADO_PEDIDO...
+  body      String
+  // ENVIADO | ENTREGADO | LEIDO | PROGRAMADO
+  status    String   @default("ENVIADO")
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+}
+
+// ────────────────────────────── Configuración ──────────────────────────────
+
+model Settings {
+  id              String @id @default("main")
+  usdToBs         Float  @default(40)
+  commissionPct   Float  @default(15)
+  defaultRadiusKm Float  @default(8)
+}

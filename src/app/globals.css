@@ -1,0 +1,182 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-nunito);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 1rem;
+  /* Paleta cálida PetService VE: crema + teal profesional + ámbar divertido */
+  --background: oklch(0.977 0.013 84);
+  --foreground: oklch(0.28 0.028 60);
+  --card: oklch(0.995 0.005 88);
+  --card-foreground: oklch(0.28 0.028 60);
+  --popover: oklch(0.995 0.005 88);
+  --popover-foreground: oklch(0.28 0.028 60);
+  --primary: oklch(0.52 0.085 195);
+  --primary-foreground: oklch(0.985 0.008 95);
+  --secondary: oklch(0.945 0.025 84);
+  --secondary-foreground: oklch(0.36 0.035 60);
+  --muted: oklch(0.95 0.018 84);
+  --muted-foreground: oklch(0.52 0.022 65);
+  --accent: oklch(0.83 0.135 78);
+  --accent-foreground: oklch(0.3 0.055 60);
+  --destructive: oklch(0.58 0.21 22);
+  --border: oklch(0.905 0.02 80);
+  --input: oklch(0.905 0.02 80);
+  --ring: oklch(0.52 0.085 195);
+  --chart-1: oklch(0.52 0.085 195);
+  --chart-2: oklch(0.8 0.14 78);
+  --chart-3: oklch(0.68 0.16 45);
+  --chart-4: oklch(0.63 0.14 155);
+  --chart-5: oklch(0.62 0.2 15);
+  --sidebar: oklch(0.985 0.008 88);
+  --sidebar-foreground: oklch(0.28 0.028 60);
+  --sidebar-primary: oklch(0.52 0.085 195);
+  --sidebar-primary-foreground: oklch(0.985 0.008 95);
+  --sidebar-accent: oklch(0.945 0.025 84);
+  --sidebar-accent-foreground: oklch(0.36 0.035 60);
+  --sidebar-border: oklch(0.905 0.02 80);
+  --sidebar-ring: oklch(0.52 0.085 195);
+}
+
+.dark {
+  --background: oklch(0.215 0.018 60);
+  --foreground: oklch(0.93 0.015 85);
+  --card: oklch(0.253 0.02 60);
+  --card-foreground: oklch(0.93 0.015 85);
+  --popover: oklch(0.253 0.02 60);
+  --popover-foreground: oklch(0.93 0.015 85);
+  --primary: oklch(0.73 0.1 185);
+  --primary-foreground: oklch(0.2 0.025 190);
+  --secondary: oklch(0.3 0.022 62);
+  --secondary-foreground: oklch(0.93 0.015 85);
+  --muted: oklch(0.3 0.02 62);
+  --muted-foreground: oklch(0.72 0.02 75);
+  --accent: oklch(0.8 0.135 80);
+  --accent-foreground: oklch(0.24 0.04 60);
+  --destructive: oklch(0.68 0.19 24);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.73 0.1 185);
+  --chart-1: oklch(0.73 0.1 185);
+  --chart-2: oklch(0.8 0.14 78);
+  --chart-3: oklch(0.7 0.16 45);
+  --chart-4: oklch(0.7 0.14 155);
+  --chart-5: oklch(0.68 0.19 18);
+  --sidebar: oklch(0.253 0.02 60);
+  --sidebar-foreground: oklch(0.93 0.015 85);
+  --sidebar-primary: oklch(0.73 0.1 185);
+  --sidebar-primary-foreground: oklch(0.2 0.025 190);
+  --sidebar-accent: oklch(0.3 0.022 62);
+  --sidebar-accent-foreground: oklch(0.93 0.015 85);
+  --sidebar-border: oklch(1 0 0 / 11%);
+  --sidebar-ring: oklch(0.73 0.1 185);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-nunito), var(--font-geist-sans), sans-serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Fondo sutil de huellitas (toque divertido) */
+.bg-paw-dots {
+  background-image: radial-gradient(
+    circle at 1.5px 1.5px,
+    color-mix(in oklab, var(--primary) 14%, transparent) 1.5px,
+    transparent 1.6px
+  );
+  background-size: 24px 24px;
+}
+
+/* Scrollbar slim para listas largas */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--foreground) 20%, transparent);
+  border-radius: 999px;
+}
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Sombra cálida suave para tarjetas */
+.shadow-warm {
+  box-shadow: 0 2px 6px -1px oklch(0.3 0.03 60 / 0.06), 0 8px 24px -6px oklch(0.3 0.03 60 / 0.1);
+}
+.dark .shadow-warm {
+  box-shadow: 0 2px 6px -1px oklch(0 0 0 / 0.3), 0 8px 24px -6px oklch(0 0 0 / 0.4);
+}
+
+/* Animación de flotación suave para ilustraciones */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-10px) rotate(1.5deg); }
+}
+.animate-floaty {
+  animation: floaty 5s ease-in-out infinite;
+}
+
+/* Wiggle para huellitas interactivas */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  75% { transform: rotate(8deg); }
+}
+.animate-wiggle:hover {
+  animation: wiggle 0.5s ease-in-out;
+}
