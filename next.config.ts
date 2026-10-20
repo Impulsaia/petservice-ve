@@ -14,6 +14,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  poweredByHeader: false, // no exponer X-Powered-By: Next.js
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,

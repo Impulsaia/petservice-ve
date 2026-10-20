@@ -426,6 +426,11 @@ export function AdminPanel() {
         {/* ── Reseñas ── */}
         <TabsContent value="resenas" className="mt-4">
           <div className="scroll-slim max-h-[560px] space-y-2 overflow-y-auto pr-1">
+            {reviews.length === 0 && (
+              <div className="p-8">
+                <EmptyState emoji="⭐" title="Sin reseñas" desc="Aún no hay reseñas para moderar. Aparecerán aquí cuando los clientes califiquen servicios." />
+              </div>
+            )}
             {reviews.map((r) => (
               <div key={r.id} className={cn("rounded-2xl border border-border/70 bg-card p-4 shadow-sm", r.hidden && "opacity-50")}>
                 <div className="flex flex-wrap items-start justify-between gap-2">

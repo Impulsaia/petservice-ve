@@ -121,15 +121,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-2">
-            {/* Tasa del día (BCV auto-actualizada) */}
+            {/* Tasa del día (BCV auto-actualizada): compacta en móvil, completa en desktop */}
             {settings && (
-              <span
-                className="hidden items-center gap-1.5 rounded-full border border-accent/50 bg-accent/15 px-3 py-1.5 text-xs font-bold text-accent-foreground lg:inline-flex"
-                title={rateTooltip(settings)}
-              >
-                <RefreshCcw className="h-3 w-3" />
-                {settings.usdToBs.toFixed(2)} Bs./$
-              </span>
+              <>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-accent/50 bg-accent/15 px-2 py-1 text-[10px] font-black text-accent-foreground lg:hidden"
+                  title={rateTooltip(settings)}
+                >
+                  <RefreshCcw className="h-3 w-3" />
+                  {settings.usdToBs.toFixed(2)} Bs./$
+                </span>
+                <span
+                  className="hidden items-center gap-1.5 rounded-full border border-accent/50 bg-accent/15 px-3 py-1.5 text-xs font-bold text-accent-foreground lg:inline-flex"
+                  title={rateTooltip(settings)}
+                >
+                  <RefreshCcw className="h-3 w-3" />
+                  {settings.usdToBs.toFixed(2)} Bs./$
+                </span>
+              </>
             )}
             <Button
               variant="outline"

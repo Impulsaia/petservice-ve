@@ -908,13 +908,14 @@ export function MapPanel({
 
 // ───────────────────────── Chip de slot de horario ─────────────────────────
 
-export function SlotChip({ time, selected, disabled, onClick }: {
-  time: string; selected: boolean; disabled: boolean; onClick: () => void;
+export function SlotChip({ time, selected, disabled, onClick, reason }: {
+  time: string; selected: boolean; disabled: boolean; onClick: () => void; reason?: string;
 }) {
   return (
     <button
       disabled={disabled}
       onClick={onClick}
+      title={disabled && reason ? reason : undefined}
       className={cn(
         "flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-sm font-bold transition-all",
         selected

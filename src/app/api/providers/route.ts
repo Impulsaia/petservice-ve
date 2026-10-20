@@ -12,6 +12,9 @@ import { haversineKm } from "@/lib/petservice/geo";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const num = (v: string | null, min: number, max: number, dflt: number) => {
+    // Nota: un param ausente (null/vacío) debe caer al default — Number(null)=0
+    // contaminaba lat/lng con 0,0 y el Haversine filtraba TODOS los resultados.
+    if (v === null || v.trim() === "") return dflt;
     const n = Number(v);
     return isFinite(n) && n >= min && n <= max ? n : dflt;
   };

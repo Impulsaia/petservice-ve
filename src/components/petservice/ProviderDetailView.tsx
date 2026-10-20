@@ -90,7 +90,7 @@ export function ProviderDetailView() {
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Consultar directamente por WhatsApp"
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#25D366] px-3 text-xs font-bold text-white transition-colors hover:bg-[#1ebe5b]"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-[#25D366] px-3 text-xs font-bold text-white transition-colors hover:bg-[#1ebe5b] md:h-8"
                 >
                   <MessageSquareQuote className="h-3.5 w-3.5" /> Consultar por WhatsApp
                 </a>

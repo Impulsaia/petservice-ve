@@ -140,10 +140,12 @@ export async function POST(req: Request) {
   });
 
   // Notificaciones WhatsApp simuladas: confirmación de solicitud + recordatorio programado
+  // Fecha legible (mié 21 oct) — mediodía UTC evita corrimientos de zona
+  const fechaLinda = new Date(`${date}T12:00:00.000Z`).toLocaleDateString("es-VE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   await notify(
     auth.id,
     "CONFIRMACION_RESERVA",
-    `🐾 PetService VE: ¡Hola ${auth.name.split(" ")[0]}! Registramos tu solicitud ${booking.code} (${service.name} para ${pet.name}). ${provider.businessName} te espera el ${date} a las ${time}. Completa el pago para confirmar.`
+    `🐾 PetService VE: ¡Hola ${auth.name.split(" ")[0]}! Registramos tu solicitud ${booking.code} (${service.name} para ${pet.name}). ${provider.businessName} te espera el ${fechaLinda} a las ${time}. Completa el pago para confirmar.`
   );
   await notify(
     auth.id,

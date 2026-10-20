@@ -195,7 +195,8 @@
   line-height: 1.35;
 }
 .leaflet-control-attribution {
-  font-size: 9px !important;
+  /* ≥11px: requisito legal de atribución OSM (ODbL) + legibilidad */
+  font-size: 11px !important;
   background: rgba(255, 255, 255, 0.85) !important;
   border-radius: 8px 0 0 0;
 }

@@ -506,7 +506,7 @@ export function BookingWizard() {
                 ) : (
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                     {slots.map((s) => (
-                      <SlotChip key={s.time} time={s.time} selected={time === s.time} disabled={!s.available} onClick={() => setTime(s.time)} />
+                      <SlotChip key={s.time} time={s.time} selected={time === s.time} disabled={!s.available} reason={s.reason} onClick={() => setTime(s.time)} />
                     ))}
                   </div>
                 )}

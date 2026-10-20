@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     await notify(
       auth.id,
       "PAGO_EN_REVISION",
-      `🧾 PetService VE: Recibimos tu pago por ${method === "PAGO_MOVIL" ? "Pago Móvil" : method} para ${booking.code} (Bs. ${booking.priceBs.toFixed(2)}). Te confirmamos en breve tras la verificación.`
+      `🧾 PetService VE: Recibimos tu pago por ${method === "PAGO_MOVIL" ? "Pago Móvil" : method} para ${booking.code} (Bs. ${booking.priceBs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). Te confirmamos en breve tras la verificación.`
     );
   }
 
