@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Star, Plus, PawPrint, Bell, Wallet, MessageSquareQuote, CalendarDays, ChevronRight, MessageCircle } from "lucide-react";
+import { Star, Plus, PawPrint, Bell, Wallet, MessageSquareQuote, CalendarDays, ChevronRight, MessageCircle, Search, CalendarClock, Layers } from "lucide-react";
 import { apiGet, apiPost, apiPatch } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
-import { REVIEW_TAGS, PET_SIZES, PET_SPECIES, BOOKING_STATUS } from "@/lib/petservice/constants";
+import { REVIEW_TAGS, PET_SIZES, BOOKING_STATUS } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs, fmtDateTime, fmtRelative, waLink } from "@/lib/petservice/format";
 import { Avatar, BookingStatusBadge, PaymentStatusBadge, EmptyState, CategoryIcon } from "@/components/petservice/shared";
+import { PetCard, PetFormDialog, StatCard, SPECIES_META, type PetFull } from "@/components/petservice/client-parts";
 
 interface BookingItem {
   id: string; code: string; status: string; address: string; scheduledAt: string;
@@ -27,24 +28,33 @@ interface BookingItem {
   payment: { id: string; method: string; status: string; reference: string | null } | null;
   review: { id: string; rating: number } | null;
 }
-interface PetItem { id: string; name: string; species: string; breed: string | null; size: string; notes: string | null }
 interface NotifItem { id: string; channel: string; template: string; body: string; status: string; createdAt: string }
 
 export function ClientAreaView() {
   const { settings, bumpData, openProvider, user } = useAppStore();
   const rate = settings?.usdToBs ?? 40;
   const [bookings, setBookings] = useState<BookingItem[] | null>(null);
-  const [pets, setPets] = useState<PetItem[]>([]);
+  const [pets, setPets] = useState<PetFull[]>([]);
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const [reviewFor, setReviewFor] = useState<BookingItem | null>(null);
-  const [addPetOpen, setAddPetOpen] = useState(false);
-  const [newPet, setNewPet] = useState({ name: "", species: "PERRO", size: "S", breed: "", notes: "" });
+
+  // ── Mascotas: filtros + dialog ──
+  const [petQuery, setPetQuery] = useState("");
+  const [speciesFilter, setSpeciesFilter] = useState("ALL");
+  const [sizeFilter, setSizeFilter] = useState("ALL");
+  const [petSort, setPetSort] = useState("nombre");
+  const [petDialogOpen, setPetDialogOpen] = useState(false);
+  const [editingPet, setEditingPet] = useState<PetFull | null>(null);
+
+  // ── Reservas: filtros ligeros (estado + búsqueda) ──
+  const [bkQuery, setBkQuery] = useState("");
+  const [bkStatus, setBkStatus] = useState("ALL");
 
   const load = useCallback(() => {
     apiGet<{ bookings: BookingItem[] }>("/api/bookings")
       .then((d) => setBookings(d.bookings))
       .catch(() => setBookings([]));
-    apiGet<{ pets: PetItem[] }>("/api/pets")
+    apiGet<{ pets: PetFull[] }>("/api/pets")
       .then((d) => setPets(d.pets))
       .catch(() => setPets([]));
     apiGet<{ notifications: NotifItem[] }>("/api/notifications")
@@ -64,21 +74,86 @@ export function ClientAreaView() {
     }
   }
 
-  async function createPet() {
-    if (newPet.name.trim().length < 2) return toast.error("Ponle un nombre a tu peludito");
-    try {
-      const { pet } = await apiPost<{ pet: PetItem }>("/api/pets", newPet);
-      setPets((ps) => [...ps, pet]);
-      setAddPetOpen(false);
-      setNewPet({ name: "", species: "PERRO", size: "S", breed: "", notes: "" });
-      toast.success(`${pet.name} registrado 🐾`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error");
-    }
+  function openCreatePet() {
+    setEditingPet(null);
+    setPetDialogOpen(true);
   }
 
-  const active = (bookings ?? []).filter((b) => ["PENDIENTE_PAGO", "CONFIRMADA", "EN_CURSO"].includes(b.status));
-  const history = (bookings ?? []).filter((b) => ["COMPLETADA", "CANCELADA"].includes(b.status));
+  function openEditPet(p: PetFull) {
+    setEditingPet(p);
+    setPetDialogOpen(true);
+  }
+
+  function onPetSaved(saved: PetFull) {
+    setPets((ps) => (ps.some((x) => x.id === saved.id) ? ps.map((x) => (x.id === saved.id ? saved : x)) : [...ps, saved]));
+    setPetDialogOpen(false);
+    setEditingPet(null);
+    bumpData();
+  }
+
+  function onPetDeleted(id: string) {
+    setPets((ps) => ps.filter((p) => p.id !== id));
+    bumpData();
+  }
+
+  // ── Listado filtrado/ordenado de mascotas ──
+  const visiblePets = useMemo(() => {
+    const q = petQuery.trim().toLowerCase();
+    const list = pets.filter((p) => {
+      if (speciesFilter !== "ALL" && p.species !== speciesFilter) return false;
+      if (sizeFilter !== "ALL" && p.size !== sizeFilter) return false;
+      if (q && !`${p.name} ${p.breed ?? ""}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const byName = (a: PetFull, b: PetFull) => a.name.localeCompare(b.name, "es");
+    if (petSort === "edad") {
+      // De mayor a menor edad (nació antes primero); sin fecha al final
+      return [...list].sort((a, b) => {
+        if (!a.birthDate && !b.birthDate) return byName(a, b);
+        if (!a.birthDate) return 1;
+        if (!b.birthDate) return -1;
+        return a.birthDate.localeCompare(b.birthDate) || byName(a, b);
+      });
+    }
+    if (petSort === "recientes") {
+      // No hay createdAt en Pet: el cuid es ordenable por tiempo (aprox. recientes primero)
+      return [...list].sort((a, b) => b.id.localeCompare(a.id));
+    }
+    return [...list].sort(byName);
+  }, [pets, petQuery, speciesFilter, sizeFilter, petSort]);
+
+  const petFiltersActive = petQuery.trim() !== "" || speciesFilter !== "ALL" || sizeFilter !== "ALL";
+
+  function clearPetFilters() {
+    setPetQuery("");
+    setSpeciesFilter("ALL");
+    setSizeFilter("ALL");
+  }
+
+  // ── KPIs ──
+  const speciesCount = new Set(pets.map((p) => p.species)).size;
+  const speciesEmojis = [...new Set(pets.map((p) => SPECIES_META[p.species]?.emoji ?? "🐾"))].join(" ");
+  const nextBooking = useMemo(() => {
+    const list = (bookings ?? []).filter((b) => ["PENDIENTE_PAGO", "CONFIRMADA", "EN_CURSO"].includes(b.status));
+    const byDate = (a: BookingItem, b: BookingItem) => a.scheduledAt.localeCompare(b.scheduledAt);
+    const future = list.filter((b) => new Date(b.scheduledAt).getTime() >= Date.now()).sort(byDate);
+    if (future.length > 0) return future[0];
+    return list.filter((b) => b.status === "EN_CURSO").sort(byDate)[0] ?? null;
+  }, [bookings]);
+
+  // ── Reservas filtradas ──
+  const matchBooking = useCallback(
+    (b: BookingItem) => {
+      if (bkStatus !== "ALL" && b.status !== bkStatus) return false;
+      const q = bkQuery.trim().toLowerCase();
+      if (!q) return true;
+      return [b.code, b.provider.businessName, b.service.name, b.pet.name].join(" ").toLowerCase().includes(q);
+    },
+    [bkQuery, bkStatus]
+  );
+
+  const active = (bookings ?? []).filter((b) => ["PENDIENTE_PAGO", "CONFIRMADA", "EN_CURSO"].includes(b.status) && matchBooking(b));
+  const history = (bookings ?? []).filter((b) => ["COMPLETADA", "CANCELADA"].includes(b.status) && matchBooking(b));
 
   return (
     <div className="space-y-5">
@@ -90,6 +165,29 @@ export function ClientAreaView() {
         </div>
       </div>
 
+      {/* ─────────── KPIs ─────────── */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard
+          icon={PawPrint}
+          label="Mis mascotas"
+          value={`${pets.length} ${pets.length === 1 ? "peludito" : "peluditos"}`}
+          sub={pets.length ? "Con ficha lista para reservar 🐾" : "Aún no registras ninguna"}
+        />
+        <StatCard
+          icon={Layers}
+          label="Especies distintas"
+          value={`${speciesCount}`}
+          sub={speciesCount ? `${speciesEmojis} en tu manada` : "Empieza con tu primer peludito"}
+        />
+        <StatCard
+          icon={CalendarClock}
+          label="Próxima reserva"
+          value={nextBooking ? fmtDateTime(nextBooking.scheduledAt) : "Nada agendado"}
+          sub={nextBooking ? `${nextBooking.service.name} · ${nextBooking.provider.businessName}` : "Explora prestadores y agenda"}
+          className={nextBooking ? "border-primary/40 bg-primary/5" : undefined}
+        />
+      </div>
+
       <Tabs defaultValue="reservas">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-secondary p-1.5 sm:w-fit">
           <TabsTrigger value="reservas" className="gap-1.5 rounded-xl font-bold"><CalendarDays className="h-4 w-4" /> Reservas</TabsTrigger>
@@ -99,10 +197,35 @@ export function ClientAreaView() {
 
         {/* ─────────── Reservas ─────────── */}
         <TabsContent value="reservas" className="mt-4 space-y-6">
+          {/* Filtros ligeros */}
+          <div className="grid gap-2 rounded-2xl border border-border/70 bg-card p-3 sm:grid-cols-[1fr_220px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input
+                value={bkQuery}
+                onChange={(e) => setBkQuery(e.target.value)}
+                placeholder="Buscar por código, prestador, servicio o mascota…"
+                aria-label="Buscar reservas"
+                className="h-10 rounded-xl pl-9"
+              />
+            </div>
+            <Select value={bkStatus} onValueChange={setBkStatus}>
+              <SelectTrigger aria-label="Filtrar por estado" className="h-10 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Estado: Todos</SelectItem>
+                {Object.entries(BOOKING_STATUS).map(([key, meta]) => (
+                  <SelectItem key={key} value={key}>{meta.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <section>
             <h2 className="mb-3 font-display text-lg font-extrabold">Próximas y activas ({active.length})</h2>
             {active.length === 0 ? (
-              <EmptyState emoji="🗓️" title="No tienes reservas activas" desc="Explora prestadores cerca de ti y agenda en minutos." />
+              <EmptyState emoji="🗓️" title={bkQuery || bkStatus !== "ALL" ? "Nada con esos filtros" : "No tienes reservas activas"} desc={bkQuery || bkStatus !== "ALL" ? "Prueba con otro estado o limpia la búsqueda." : "Explora prestadores cerca de ti y agenda en minutos."} />
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {active.map((b) => <BookingCard key={b.id} b={b} rate={rate} onCancel={cancelBooking} onReview={(bb) => setReviewFor(bb)} onOpenProvider={openProvider} />)}
@@ -112,7 +235,7 @@ export function ClientAreaView() {
           <section>
             <h2 className="mb-3 font-display text-lg font-extrabold">Historial ({history.length})</h2>
             {history.length === 0 ? (
-              <EmptyState emoji="📦" title="Sin historial todavía" />
+              <EmptyState emoji="📦" title={bkQuery || bkStatus !== "ALL" ? "Nada con esos filtros" : "Sin historial todavía"} />
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {history.map((b) => <BookingCard key={b.id} b={b} rate={rate} onCancel={cancelBooking} onReview={(bb) => setReviewFor(bb)} onOpenProvider={openProvider} />)}
@@ -121,76 +244,91 @@ export function ClientAreaView() {
           </section>
         </TabsContent>
 
-        {/* ─────────── Mascotas ─────────── */}
-        <TabsContent value="mascotas" className="mt-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {pets.map((p) => (
-              <article key={p.id} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-transform hover:-translate-y-0.5">
-                <div className="flex items-center gap-3">
-                  <Avatar name={p.name} emoji={p.species === "GATO" ? "🐱" : p.species === "PERRO" ? "🐶" : "🐾"} className="h-12 w-12 text-xl" />
-                  <div>
-                    <h3 className="font-display font-extrabold">{p.name}</h3>
-                    <p className="text-xs text-muted-foreground">{PET_SPECIES[p.species]} {p.breed ? `· ${p.breed}` : ""}</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-bold text-secondary-foreground">{PET_SIZES[p.size]}</span>
-                  {p.notes && <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent-foreground">📝 {p.notes.slice(0, 30)}{p.notes.length > 30 ? "…" : ""}</span>}
-                </div>
-              </article>
-            ))}
-            <button onClick={() => setAddPetOpen(true)} className="flex min-h-[120px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border text-muted-foreground transition-all hover:border-primary/50 hover:text-primary">
-              <Plus className="h-6 w-6" />
-              <span className="text-sm font-bold">Registrar mascota</span>
-            </button>
+        {/* ─────────── Mascotas (pro) ─────────── */}
+        <TabsContent value="mascotas" className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-lg font-extrabold">
+              Mis Mascotas
+              <span className="ml-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-secondary px-2 text-xs font-black text-secondary-foreground">{pets.length}</span>
+            </h2>
+            <Button onClick={openCreatePet} className="h-11 rounded-xl bg-primary font-bold shadow-warm" aria-label="Agregar mascota">
+              <Plus className="h-4 w-4" /> Agregar mascota
+            </Button>
           </div>
 
-          {addPetOpen && (
-            <Dialog open onOpenChange={(v) => !v && setAddPetOpen(false)}>
-              <DialogContent className="rounded-3xl sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="font-display font-black">Nueva mascota 🐾</DialogTitle>
-                  <DialogDescription>Registra los datos básicos para reservar servicios</DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <Label className="text-xs font-bold">Nombre</Label>
-                    <Input value={newPet.name} onChange={(e) => setNewPet({ ...newPet, name: e.target.value })} placeholder="Ej: Simón" className="mt-1 rounded-xl" />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold">Especie</Label>
-                    <Select value={newPet.species} onValueChange={(v) => setNewPet({ ...newPet, species: v })}>
-                      <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PERRO">🐕 Perro</SelectItem>
-                        <SelectItem value="GATO">🐈 Gato</SelectItem>
-                        <SelectItem value="OTRO">🐾 Otro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold">Tamaño</Label>
-                    <Select value={newPet.size} onValueChange={(v) => setNewPet({ ...newPet, size: v })}>
-                      <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="S">Pequeño</SelectItem>
-                        <SelectItem value="M">Mediano</SelectItem>
-                        <SelectItem value="L">Grande</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs font-bold">Raza</Label>
-                    <Input value={newPet.breed} onChange={(e) => setNewPet({ ...newPet, breed: e.target.value })} placeholder="Ej: Mestizo" className="mt-1 rounded-xl" />
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs font-bold">Notas para el prestador</Label>
-                    <Textarea value={newPet.notes} onChange={(e) => setNewPet({ ...newPet, notes: e.target.value })} rows={2} placeholder="Ej: Nervioso con secadores" className="mt-1 rounded-2xl" />
-                  </div>
-                </div>
-                <Button onClick={createPet} className="w-full rounded-xl bg-primary font-bold">Guardar mascota</Button>
-              </DialogContent>
-            </Dialog>
+          {/* Barra de herramientas */}
+          <div className="grid gap-2 rounded-2xl border border-border/70 bg-card p-3 md:grid-cols-[1fr_150px_150px_170px] sm:grid-cols-2">
+            <div className="relative sm:col-span-2 md:col-span-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input
+                value={petQuery}
+                onChange={(e) => setPetQuery(e.target.value)}
+                placeholder="Buscar por nombre o raza…"
+                aria-label="Buscar mascotas por nombre o raza"
+                className="h-10 rounded-xl pl-9"
+              />
+            </div>
+            <Select value={speciesFilter} onValueChange={setSpeciesFilter}>
+              <SelectTrigger aria-label="Filtrar por especie" className="h-10 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todas las especies</SelectItem>
+                {Object.entries(SPECIES_META).map(([key, meta]) => (
+                  <SelectItem key={key} value={key}>{meta.emoji} {meta.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sizeFilter} onValueChange={setSizeFilter}>
+              <SelectTrigger aria-label="Filtrar por tamaño" className="h-10 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos los tamaños</SelectItem>
+                <SelectItem value="S">Pequeño (S)</SelectItem>
+                <SelectItem value="M">Mediano (M)</SelectItem>
+                <SelectItem value="L">Grande (L)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={petSort} onValueChange={setPetSort}>
+              <SelectTrigger aria-label="Ordenar mascotas" className="h-10 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nombre">Orden: Nombre (A-Z)</SelectItem>
+                <SelectItem value="edad">Orden: Edad (mayor primero)</SelectItem>
+                <SelectItem value="recientes">Orden: Más recientes</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Grid / estados vacíos */}
+          {pets.length === 0 ? (
+            <div className="rounded-3xl border-2 border-dashed border-primary/30 bg-accent/5 px-6 py-12 text-center">
+              <div className="animate-floaty text-6xl" aria-hidden>🐶</div>
+              <h3 className="mt-4 font-display text-xl font-black">Aún no tienes mascotas registradas 🐶</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                ¡Agrega a tu primer peludito! Con su ficha lista, reservar grooming, paseos, pet sitting o consulta vet toma un minuto.
+              </p>
+              <Button onClick={openCreatePet} className="mt-5 h-11 rounded-xl bg-primary font-bold shadow-warm">
+                <Plus className="h-4 w-4" /> Agregar mascota
+              </Button>
+            </div>
+          ) : visiblePets.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-border px-6 py-12 text-center">
+              <div className="text-5xl" aria-hidden>🔎</div>
+              <p className="mt-3 font-display text-base font-black">Ninguna mascota coincide con los filtros</p>
+              <p className="mt-1 text-sm text-muted-foreground">Prueba con otro nombre, especie o tamaño.</p>
+              <Button variant="outline" onClick={clearPetFilters} className="mt-4 h-10 rounded-xl font-bold">
+                Limpiar filtros
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {visiblePets.map((p) => (
+                <PetCard key={p.id} pet={p} onEdit={openEditPet} onDeleted={onPetDeleted} />
+              ))}
+            </div>
           )}
         </TabsContent>
 
@@ -226,6 +364,9 @@ export function ClientAreaView() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog crear/editar mascota */}
+      <PetFormDialog open={petDialogOpen} pet={editingPet} onClose={() => { setPetDialogOpen(false); setEditingPet(null); }} onSaved={onPetSaved} />
 
       {/* Dialog de reseña */}
       <ReviewDialog booking={reviewFor} onClose={() => setReviewFor(null)} onDone={() => { setReviewFor(null); load(); }} />

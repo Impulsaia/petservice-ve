@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSettings, createBookingWithCode, notify, money } from "@/lib/petservice/server";
+import { getSettings, createBookingWithCode, notify, money, upsertCrmFromBooking } from "@/lib/petservice/server";
 import { requireUser, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 
 /**
@@ -124,6 +124,19 @@ export async function POST(req: Request) {
       commissionUsd,
       extrasJson: JSON.stringify(extrasSelected),
       notes: body?.notes ? cleanText(body.notes, 300) : null,
+  });
+
+  // Auto-hook CRM: la reserva registra/actualiza al contacto del prestador
+  // (source RESERVA, totalVisits+1, gasto acumulado, status ACTIVO/VIP)
+  await upsertCrmFromBooking({
+    providerId,
+    userId: auth.id,
+    name: auth.name,
+    phone: auth.phone,
+    email: auth.email,
+    petName: pet.name,
+    petType: pet.species,
+    priceUsd: usd,
   });
 
   // Notificaciones WhatsApp simuladas: confirmación de solicitud + recordatorio programado

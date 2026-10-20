@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { PawPrint, Star, Clock, ChevronRight, Navigation, Plus, Minus, Frame, LocateFixed } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categoryMeta, CITIES, ZONES } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
-import { projectToMap, getCityBounds, haversineKm, fmtDistance, type LatLng } from "@/lib/petservice/geo";
+import { projectToMap, getCityBounds, haversineKm, fmtDistance, CITY_BOUNDS, type LatLng } from "@/lib/petservice/geo";
 import { CategoryIcon, RatingStars, Avatar } from "@/components/petservice/shared";
 import { useAppStore } from "@/lib/petservice/store";
 import { toast } from "sonner";
@@ -29,7 +29,7 @@ export interface ProviderListItem {
   services: { id: string; category: string; name: string; priceUsd: number }[];
 }
 
-export function ProviderCard({ p, rate }: { p: ProviderListItem; rate: number }) {
+export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: ProviderListItem; rate: number }) {
   const openProvider = useAppStore((s) => s.openProvider);
   const meta = categoryMeta(p.serviceCategories[0] ?? "OTROS");
   const isTop = p.badges.includes("TOP");
@@ -105,7 +105,7 @@ export function ProviderCard({ p, rate }: { p: ProviderListItem; rate: number })
       </div>
     </article>
   );
-}
+});
 
 // ───────────────────────── Card skeleton ─────────────────────────
 
@@ -277,17 +277,94 @@ function CityMapArt({ city }: { city: string }) {
   );
 }
 
+/** Pines de prestadores: gradiente vertical por categoría (sin azules) */
+const CAT_PIN_GRADIENT: Record<string, string> = {
+  GROOMING: "from-teal-500 to-teal-700",
+  DELIVERY: "from-orange-500 to-orange-700",
+  PET_SITTING: "from-amber-500 to-amber-700",
+  DOG_WALKING: "from-emerald-500 to-emerald-700",
+  TRAINING: "from-rose-500 to-rose-700",
+  PET_TAXI: "from-yellow-500 to-yellow-700",
+  SPA_MOVIL: "from-fuchsia-500 to-fuchsia-700",
+  VET: "from-violet-500 to-violet-700",
+};
+
+/** Estilos del mapa (pulso del pin, textura de puntos) — respeta prefers-reduced-motion */
+const MAP_CSS = `
+@keyframes ps-pin-pulse {
+  0% { transform: scale(0.7); opacity: 0.5; }
+  70% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.ps-pin-pulse { animation: ps-pin-pulse 1.9s cubic-bezier(0.2, 0.6, 0.35, 1) infinite; }
+.ps-map-dots {
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 9%, transparent) 1.1px, transparent 1.7px);
+  background-size: 22px 22px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ps-pin-pulse { animation: none; opacity: 0.22; transform: scale(1.5); }
+}
+`;
+
+export interface MapSectorPin {
+  name: string;
+  zone?: string | null;
+  lat: number;
+  lng: number;
+}
+
+/** Fondo genérico para ciudades sin mapa detallado (nacional / "Próximamente") */
+function NationalBackdrop({ vacant, city }: { vacant: { name: string; state: string } | null; city: string }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+      {/* decoración suave tipo mapa nacional */}
+      <span className="pointer-events-none absolute left-4 top-4 text-lg opacity-30" aria-hidden>🧭</span>
+      <span className="pointer-events-none absolute right-8 top-10 text-xl opacity-20" aria-hidden>⛰️</span>
+      <span className="pointer-events-none absolute bottom-16 right-5 text-2xl opacity-25" aria-hidden>🐾</span>
+      <span className="pointer-events-none absolute bottom-24 left-8 text-xl opacity-20" aria-hidden>🌊</span>
+      <div className="relative flex h-20 w-20 items-center justify-center">
+        <span className="ps-pin-pulse pointer-events-none absolute inset-0 rounded-full bg-amber-400/50" aria-hidden />
+        <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-b from-amber-400 to-orange-500 text-3xl shadow-xl ring-4 ring-white/70 dark:ring-zinc-900/70">
+          {vacant ? "📍" : "🗺️"}
+        </span>
+      </div>
+      <div className="max-w-xs rounded-2xl border border-border/50 bg-background/90 px-4 py-3 shadow-lg backdrop-blur-md">
+        <p className="font-display text-sm font-black">{vacant ? `🚧 ${vacant.name} — Próximamente` : `🗺️ ${city}`}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {vacant
+            ? `Estamos certificando prestadores en ${vacant.state}… ¡Sé el primero!`
+            : "Mapa detallado en camino — la búsqueda y la lista funcionan con normalidad."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /**
- * Mapa interactivo de una ciudad del estado Bolívar:
+ * Mapa interactivo del marketplace:
  * - Toque corto en cualquier punto → mueve la ubicación de búsqueda
  * - Arrastrar (un dedo / mouse) en vista completa → mueve la búsqueda en vivo 🖐️📍
  * - El pin 📍 del usuario se puede arrastrar con área táctil ampliada (~44px)
  * - Zoom 1x–3x: botones, doble toque/click, rueda del mouse y PINZA con 2 dedos
  * - Con zoom activo, arrastrar hace pan del mapa
  * - Los pines de prestadores abren el perfil; el radio se recentra al soltar
+ * - Modo nacional: ciudades fuera de Bolívar muestran fondo genérico (sin commits)
+ *   y, si no hay prestadores, el pin especial "📍 Próximamente"
  * - 100% usable en móviles (pointer events unificados, touch-action none controlado)
  */
-export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; rate: number }) {
+export function MapPanel({
+  providers,
+  rate,
+  sector = null,
+  vacant = null,
+}: {
+  providers: ProviderListItem[];
+  rate: number;
+  /** sector seleccionado (desde la DB): círculo de búsqueda enfatizado en su punto */
+  sector?: MapSectorPin | null;
+  /** ciudad activa sin prestadores → modo "Próximamente" (sin pines ni búsquedas) */
+  vacant?: { name: string; state: string } | null;
+}) {
   const loc = useAppStore((s) => s.loc);
   const setLoc = useAppStore((s) => s.setLoc);
   const city = useAppStore((s) => s.city);
@@ -331,6 +408,10 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
   const radiusXPct = Math.min(120, (filters.radiusKm / bounds.kmWide) * 100);
   const radiusYPct = Math.min(120, (filters.radiusKm / bounds.kmTall) * 100);
   const activePos = pinPos ?? { x: userPos.x, y: userPos.y };
+  /** ciudad sin mapa detallado (fuera de Bolívar): fondo genérico + sin commits de búsqueda */
+  const national = !CITY_BOUNDS[city];
+  /** posición proyectada del sector seleccionado (ancla el círculo enfatizado) */
+  const sectorPos = sector && !national ? projectToMap({ lat: sector.lat, lng: sector.lng }, city) : null;
 
   // ─── Conversiones de coordenadas ───
   /** punto del viewport (clientX/Y) → % del mundo (capa transformada) */
@@ -375,6 +456,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
 
   /** confirma la nueva ubicación de búsqueda (dispara la búsqueda con debounce) */
   function commitSearchAt(pct: { x: number; y: number }) {
+    if (national) return; // sin mapa de referencia no hay coords reales: no commit
     const ll = pctToLatLng(pct.x, pct.y);
     const label = labelForPoint(ll);
     setLoc({ label, lat: ll.lat, lng: ll.lng });
@@ -506,7 +588,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
       if (zoom > 1) {
         // con zoom activo: arrastrar desplaza el mapa (pan)
         setPan(clampPan({ x: moveStart.current.panx + dx, y: moveStart.current.pany + dy }, zoom));
-      } else {
+      } else if (!national) {
         // vista completa: arrastrar mueve la ubicación de búsqueda en vivo 🖐️📍
         setPinPos(clientToWorldPct(e.clientX, e.clientY));
       }
@@ -587,7 +669,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
     <div
       ref={wrapRef}
       className={cn(
-        "relative h-full min-h-[420px] touch-none select-none overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-b from-emerald-50 to-orange-50/60 shadow-warm dark:from-emerald-950/30 dark:to-orange-950/20",
+        "relative h-full min-h-[420px] touch-none select-none overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-b from-emerald-50 via-stone-50 to-amber-50/70 shadow-warm dark:from-emerald-950/40 dark:via-zinc-950/50 dark:to-orange-950/30",
         dragMode === "pan" && (zoom > 1 || pinPos) ? "cursor-grabbing" : "cursor-crosshair"
       )}
       onPointerDown={onPointerDownBackground}
@@ -598,6 +680,9 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
       role="application"
       aria-label={`Mapa interactivo de ${city}: toca o arrastra para mover la búsqueda`}
     >
+      {/* Keyframes propios (pulso del pin, textura) — respetan prefers-reduced-motion */}
+      <style>{MAP_CSS}</style>
+
       {/* ── Capa "mundo" (se transforma con zoom/pan) ── */}
       <div
         ref={worldRef}
@@ -608,69 +693,102 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
           transition: isDragging ? "none" : "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
-        <CityMapArt city={city} />
+        {/* Textura sutil de puntos (más "mapa real", sin tiles externos) */}
+        <div className="ps-map-dots absolute inset-0" aria-hidden />
 
-        {/* Radio de búsqueda */}
-        <div
-          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-primary/50 bg-primary/10"
-          style={{ left: `${activePos.x}%`, top: `${activePos.y}%`, width: `${radiusXPct}%`, height: `${radiusYPct}%` }}
-          aria-hidden
-        />
+        {national ? (
+          <NationalBackdrop vacant={vacant} city={city} />
+        ) : (
+          <>
+            <CityMapArt city={city} />
 
-        {/* Pines de prestadores */}
-        {pins.map((p, i) => (
-          <button
-            key={p.id}
-            data-provider-id={p.id}
-            // el open por toque/click lo maneja onPointerUp (permite arrastrar desde el pin);
-            // este onClick solo responde a teclado (Enter/Espacio → detail === 0)
-            onClick={(e) => {
-              if (e.detail === 0) openProvider(p.id);
-            }}
-            title={`${p.businessName} — ${p.distanceKm !== null ? fmtDistance(p.distanceKm) : p.zoneName}`}
-            className="group absolute z-10 -translate-x-1/2 -translate-y-full"
-            style={{ left: `${p.pos.x}%`, top: `${p.pos.y}%`, zIndex: 10 + (i % 5) }}
-          >
-            <span
-              className="flex h-8 w-8 items-center justify-center rounded-full rounded-bl-sm border-2 border-white bg-primary text-white shadow-lg transition-transform hover:scale-125 dark:border-zinc-900"
-              style={{ transform: `scale(${1 / zoom})` }}
-            >
-              <PawPrint className="h-4 w-4" />
-            </span>
-            <span
-              className="pointer-events-none absolute -top-9 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-foreground px-2 py-1 text-[10px] font-bold text-background shadow-md group-hover:block"
-              style={{ transform: `translateX(-50%) scale(${1 / zoom})` }}
-            >
-              {p.businessName} {p.distanceKm !== null ? `· ${fmtDistance(p.distanceKm)}` : ""}
-            </span>
-          </button>
-        ))}
-
-        {/* Ubicación del usuario (arrastrable) */}
-        <span
-          className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
-          style={{ left: `${activePos.x}%`, top: `${activePos.y}%` }}
-        >
-          <span
-            onPointerDown={onPinPointerDown}
-            title="Arrástrame o toca el mapa para mover la búsqueda"
-            role="button"
-            aria-label={`Tu ubicación de búsqueda: ${loc.label} — arrastra para ajustar`}
-            tabIndex={0}
-            className={cn(
-              // ::after amplía el área táctil a ~44px sin cambiar el tamaño visual
-              "relative block h-3.5 w-3.5 cursor-grab rounded-full border-2 border-white bg-accent shadow after:absolute after:-inset-3.5 after:rounded-full after:content-['']",
-              dragMode === "pin" && "cursor-grabbing scale-150"
+            {/* Radio de búsqueda — enfatizado y anclado al sector cuando hay uno seleccionado */}
+            {sectorPos ? (
+              <div
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-solid border-primary/70 bg-primary/15 shadow-[0_0_0_6px_color-mix(in_oklab,var(--primary)_10%,transparent)]"
+                style={{ left: `${sectorPos.x}%`, top: `${sectorPos.y}%`, width: `${radiusXPct}%`, height: `${radiusYPct}%` }}
+                aria-hidden
+              />
+            ) : (
+              <div
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-primary/50 bg-primary/10"
+                style={{ left: `${activePos.x}%`, top: `${activePos.y}%`, width: `${radiusXPct}%`, height: `${radiusYPct}%` }}
+                aria-hidden
+              />
             )}
-          />
-          <span className={cn("pointer-events-none absolute -inset-2.5 rounded-full bg-accent/40", dragMode === "pin" ? "" : "animate-ping")} aria-hidden />
-          <span
-            className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-accent px-2 py-0.5 text-[9px] font-black text-accent-foreground shadow"
-            style={{ transform: `translateX(-50%) scale(${Math.max(0.6, 1 / zoom)})` }}
-          >
-            📍 {dragMode === "pin" ? "Suelta para buscar aquí" : loc.label}
-          </span>
-        </span>
+
+            {/* Pines de prestadores (gradiente por categoría + emoji + etiqueta a zoom alto) */}
+            {pins.map((p, i) => {
+              const cm = categoryMeta(p.serviceCategories[0] ?? "OTROS");
+              return (
+                <button
+                  key={p.id}
+                  data-provider-id={p.id}
+                  // el open por toque/click lo maneja onPointerUp (permite arrastrar desde el pin);
+                  // este onClick solo responde a teclado (Enter/Espacio → detail === 0)
+                  onClick={(e) => {
+                    if (e.detail === 0) openProvider(p.id);
+                  }}
+                  title={`${p.businessName} — ${p.distanceKm !== null ? fmtDistance(p.distanceKm) : p.zoneName}`}
+                  className="group absolute z-10 -translate-x-1/2 -translate-y-full"
+                  style={{ left: `${p.pos.x}%`, top: `${p.pos.y}%`, zIndex: 10 + (i % 5) }}
+                >
+                  {/* escala inversa al zoom (anclada a la punta del pin) */}
+                  <span className="block origin-bottom" style={{ transform: `scale(${1 / zoom})` }}>
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-full rounded-bl-sm border-2 border-white bg-gradient-to-b shadow-md ring-1 ring-black/10 transition-transform duration-150 group-hover:scale-[1.15] group-active:scale-95 dark:border-zinc-900",
+                        CAT_PIN_GRADIENT[cm.key] ?? "from-primary to-teal-700"
+                      )}
+                    >
+                      <span className="text-[13px] leading-none drop-shadow-sm">{cm.emoji}</span>
+                    </span>
+                  </span>
+                  <span
+                    className="pointer-events-none absolute -top-9 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-foreground/95 px-2 py-1 text-[10px] font-bold text-background shadow-md backdrop-blur group-hover:block"
+                    style={{ transform: `translateX(-50%) scale(${1 / zoom})` }}
+                  >
+                    {p.businessName} {p.distanceKm !== null ? `· ${fmtDistance(p.distanceKm)}` : ""}
+                  </span>
+                  {zoom >= 2 && (
+                    <span
+                      className="pointer-events-none absolute left-1/2 top-full mt-0.5 whitespace-nowrap rounded-full bg-background/95 px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-md ring-1 ring-border/60"
+                      style={{ transform: `translateX(-50%) scale(${1 / zoom})` }}
+                    >
+                      {p.businessName}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Ubicación del usuario (arrastrable) */}
+            <span
+              className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${activePos.x}%`, top: `${activePos.y}%` }}
+            >
+              <span
+                onPointerDown={onPinPointerDown}
+                title="Arrástrame o toca el mapa para mover la búsqueda"
+                role="button"
+                aria-label={`Tu ubicación de búsqueda: ${loc.label} — arrastra para ajustar`}
+                tabIndex={0}
+                className={cn(
+                  // ::after amplía el área táctil a ~44px sin cambiar el tamaño visual
+                  "relative block h-3.5 w-3.5 cursor-grab rounded-full border-2 border-white bg-accent shadow after:absolute after:-inset-3.5 after:rounded-full after:content-['']",
+                  dragMode === "pin" && "cursor-grabbing scale-150"
+                )}
+              />
+              <span className={cn("ps-pin-pulse pointer-events-none absolute -inset-2.5 rounded-full bg-accent/50", dragMode === "pin" && "opacity-0")} aria-hidden />
+              <span
+                className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[9px] font-black text-accent-foreground shadow-md"
+                style={{ transform: `translateX(-50%) scale(${Math.max(0.6, 1 / zoom)})` }}
+              >
+                📍 {dragMode === "pin" ? "Suelta para buscar aquí" : loc.label}
+              </span>
+            </span>
+          </>
+        )}
       </div>
 
       {/* ── UI fija (fuera de la capa transformada) ── */}
@@ -684,8 +802,10 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
             onClick={() => switchCity(c.name)}
             onPointerDown={(e) => e.stopPropagation()}
             className={cn(
-              "rounded-xl px-3 py-1.5 text-[11px] font-black shadow-sm backdrop-blur transition-all",
-              city === c.name ? "bg-primary text-primary-foreground" : "bg-background/85 text-muted-foreground hover:text-foreground"
+              "rounded-xl px-3 py-1.5 text-[11px] font-black shadow-md backdrop-blur-md transition-all active:scale-95",
+              city === c.name
+                ? "bg-primary text-primary-foreground shadow-primary/20"
+                : "bg-background/85 text-muted-foreground ring-1 ring-border/50 hover:bg-background hover:text-foreground"
             )}
           >
             {c.emoji} {c.name}
@@ -699,7 +819,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
           onClick={() => zoomTo(zoom + 1)}
           onPointerDown={(e) => e.stopPropagation()}
           disabled={zoom >= 3}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/90 shadow-sm backdrop-blur transition-all hover:bg-background disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-border/50 bg-background/90 shadow-lg backdrop-blur-md transition-all hover:bg-background active:scale-95 disabled:opacity-40"
           aria-label="Acercar mapa"
           title="Acercar (o doble click en el mapa)"
         >
@@ -710,7 +830,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
           onClick={() => zoomTo(zoom - 1)}
           onPointerDown={(e) => e.stopPropagation()}
           disabled={zoom <= 1}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/90 shadow-sm backdrop-blur transition-all hover:bg-background disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-border/50 bg-background/90 shadow-lg backdrop-blur-md transition-all hover:bg-background active:scale-95 disabled:opacity-40"
           aria-label="Alejar mapa"
           title="Alejar"
         >
@@ -719,7 +839,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
         <button
           onClick={resetView}
           onPointerDown={(e) => e.stopPropagation()}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/90 shadow-sm backdrop-blur transition-all hover:bg-background"
+          className="flex h-9 w-9 items-center justify-center rounded-2xl border border-border/50 bg-background/90 shadow-lg backdrop-blur-md transition-all hover:bg-background active:scale-95"
           aria-label="Vista completa de la ciudad"
           title="Vista completa de la ciudad"
         >
@@ -729,7 +849,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
           <button
             onClick={() => centerOnPct({ x: userPos.x, y: userPos.y })}
             onPointerDown={(e) => e.stopPropagation()}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/90 shadow-sm backdrop-blur transition-all hover:bg-background"
+            className="flex h-9 w-9 items-center justify-center rounded-2xl border border-border/50 bg-background/90 shadow-lg backdrop-blur-md transition-all hover:bg-background active:scale-95"
             aria-label="Centrar en mi ubicación de búsqueda"
             title="Centrar en mi ubicación de búsqueda"
           >
@@ -746,9 +866,14 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
       )}
 
       {/* Leyenda (no roba toques: pointer-events-none) */}
-      <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-30 flex items-center justify-between gap-2 rounded-xl bg-background/85 px-3 py-2 text-[11px] font-semibold shadow-sm backdrop-blur">
+      <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-30 flex items-center justify-between gap-2 rounded-2xl border border-border/50 bg-background/85 px-3 py-2 text-[11px] font-semibold shadow-lg backdrop-blur-md">
         <span className="flex min-w-0 items-center gap-1.5">
           <Navigation className="h-3 w-3 shrink-0 text-accent-foreground" /> <span className="truncate">{loc.label}</span>
+          {sector && (
+            <span className="hidden shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-black text-primary sm:inline-flex">
+              🏘️ {sector.name}
+            </span>
+          )}
         </span>
         <span className="flex shrink-0 items-center gap-3 text-muted-foreground">
           <span className="hidden items-center gap-1 md:flex">👆 Toca o arrastra el mapa</span>
@@ -758,7 +883,7 @@ export function MapPanel({ providers, rate }: { providers: ProviderListItem[]; r
       </div>
 
       {/* Tarjeta flotante de referencia de precio (baja a la esquina para no chocar con las ciudades en móvil) */}
-      <div className="pointer-events-none absolute bottom-12 right-3 z-20 rounded-xl bg-background/90 px-2.5 py-1.5 text-[10px] font-bold shadow-sm backdrop-blur">
+      <div className="pointer-events-none absolute bottom-12 right-3 z-20 rounded-2xl border border-border/50 bg-background/90 px-2.5 py-1.5 text-[10px] font-bold shadow-lg backdrop-blur-md">
         🛁 Spa desde {fmtUsd(15)} · {fmtBs(15 * rate)}
       </div>
     </div>

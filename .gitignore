@@ -74,3 +74,4 @@ server.log
 
 # Archivos generados por el CLI de Vercel
 .vercel/
+/db/*.db.bak

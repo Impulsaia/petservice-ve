@@ -44,3 +44,68 @@ export function money(usd: number, rate: number) {
     priceBs: Math.round(usd * rate * 100) / 100,
   };
 }
+
+/** Devuelve el Provider asociado al usuario de la sesión (o null) */
+export function getProviderOf(userId: string) {
+  return db.provider.findUnique({ where: { userId } });
+}
+
+/**
+ * Auto-hook CRM: al crear una reserva se registra/actualiza el contacto del
+ * prestador (upsert por providerId + userId). Incrementa visitas y gasto,
+ * marca ACTIVO (VIP con ≥3 visitas o gasto alto) y deja rastro de la mascota.
+ * Nunca lanza: el CRM es un extra y no debe romper la reserva.
+ */
+export async function upsertCrmFromBooking(input: {
+  providerId: string;
+  userId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  petName: string | null;
+  petType: string | null;
+  priceUsd: number;
+}): Promise<void> {
+  try {
+    const existing = await db.crmContact.findFirst({
+      where: { providerId: input.providerId, userId: input.userId },
+    });
+    if (existing) {
+      const totalVisits = existing.totalVisits + 1;
+      const totalSpentUsd = Math.round((existing.totalSpentUsd + input.priceUsd) * 100) / 100;
+      await db.crmContact.update({
+        where: { id: existing.id },
+        data: {
+          totalVisits,
+          totalSpentUsd,
+          lastVisitAt: new Date(),
+          status: totalVisits >= 3 || totalSpentUsd >= 120 ? "VIP" : existing.status === "NUEVO" ? "ACTIVO" : existing.status,
+          source: existing.source === "MANUAL" ? "RESERVA" : existing.source,
+          phone: existing.phone ?? input.phone,
+          petName: input.petName ?? existing.petName,
+          petType: input.petType ?? existing.petType,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      await db.crmContact.create({
+        data: {
+          providerId: input.providerId,
+          userId: input.userId,
+          name: input.name,
+          phone: input.phone,
+          email: input.email,
+          petName: input.petName,
+          petType: input.petType,
+          status: "ACTIVO",
+          source: "RESERVA",
+          totalVisits: 1,
+          totalSpentUsd: input.priceUsd,
+          lastVisitAt: new Date(),
+        },
+      });
+    }
+  } catch (e) {
+    console.error("CRM auto-hook error (no bloquea la reserva):", e);
+  }
+}

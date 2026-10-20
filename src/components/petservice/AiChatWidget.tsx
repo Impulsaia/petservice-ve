@@ -14,7 +14,7 @@ interface Msg { role: "user" | "assistant"; content: string }
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "🐾 ¡Hola! Soy Toby, el asistente de PetService VE. Pregúntame por servicios, precios, zonas o cómo agendar. ¿En qué te ayudo?",
+    "🐾 ¡Hola! Soy Firulais 🐕, el asistente de PetService VE. Pregúntame por servicios, precios, zonas o cómo agendar. ¿En qué te ayudo?",
 };
 
 const SUGGESTIONS = [
@@ -61,7 +61,7 @@ export function AiChatWidget() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Abrir asistente IA Toby"
+          aria-label="Abrir asistente IA Firulais"
           className="fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-emerald-600 text-white shadow-xl transition-transform hover:scale-110 active:scale-95 md:bottom-6 md:right-6"
         >
           <span className="absolute -inset-1 animate-ping rounded-full bg-primary/20" aria-hidden />
@@ -79,7 +79,7 @@ export function AiChatWidget() {
               <Bot className="h-5 w-5" />
             </span>
             <div className="flex-1 leading-tight">
-              <div className="text-sm font-black">Toby · Asistente IA</div>
+              <div className="text-sm font-black">Firulais · Asistente IA</div>
               <div className="flex items-center gap-1 text-[10px] opacity-90">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> en línea · responde al instante
               </div>
@@ -163,7 +163,7 @@ export function AiChatWidget() {
           </form>
 
           <p className="px-3 pb-2.5 text-center text-[10px] leading-tight text-muted-foreground">
-            Toby puede equivocarse 🙏 Temas médicos veterinarios: consulta siempre a un profesional.
+            Firulais puede equivocarse 🙏 Temas médicos veterinarios: consulta siempre a un profesional.
           </p>
         </div>
       )}

@@ -155,7 +155,9 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
   const payload = verifySessionToken(token);
   if (!payload) return null;
   const user = await db.user.findUnique({ where: { id: payload.uid } });
-  if (!user || !user.passwordHash) return null; // usuario borrado o sin credenciales
+  // Sin credenciales locales Y sin OAuth → cuenta huérfana.
+  // Inactivo → el admin la desactivó: la sesión deja de ser válida al instante.
+  if (!user || (!user.passwordHash && !user.googleId) || !user.active) return null;
   return { id: user.id, email: user.email, name: user.name, phone: user.phone, role: user.role };
 }
 

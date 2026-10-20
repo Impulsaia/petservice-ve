@@ -22,12 +22,18 @@ model User {
   phone        String?
   name         String
   role         String   @default("CLIENT") // CLIENT | PROVIDER | ADMIN
-  passwordHash String   @default("") // scrypt: s2:<saltB64>:<hashB64>
+  passwordHash String   @default("") // scrypt: s2:<saltB64>:<hashB64> (vacío = solo OAuth)
+  googleId     String?  @unique // login con Google (OAuth 2.0)
+  avatarUrl    String?  // foto de perfil de Google u otra fuente
+  // Un admin puede desactivar una cuenta: bloquea login y sesión sin borrar datos
+  active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
   provider       Provider?
   pets           Pet[]
   clientBookings Booking[] @relation("ClientBookings")
+  passwordResets PasswordReset[]
+  crmContacts    CrmContact[]
 }
 
 // ────────────────────────────── Prestadores ──────────────────────────────
@@ -69,6 +75,8 @@ model Service {
   description String
   durationMin Int
   priceUsd    Float
+  // Tope opcional del rango de precio ("desde priceUsd hasta priceToUsd")
+  priceToUsd  Float?
   // DOMICILIO | PICKUP | ONLINE
   modality    String @default("DOMICILIO")
   petTypes    String @default("PERRO,GATO") // separado por coma
@@ -93,6 +101,11 @@ model Pet {
   // S | M | L
   size    String
   notes   String?
+  // Campos opcionales del perfil ampliado de la mascota
+  birthDate   DateTime?
+  weightKg    Float?
+  // MACHO | HEMBRA | N/D
+  gender      String?
 
   bookings Booking[]
 }
@@ -185,4 +198,120 @@ model Settings {
   usdToBs         Float  @default(40)
   commissionPct   Float  @default(15)
   defaultRadiusKm Float  @default(8)
+}
+
+// ─────────────────────── Recuperación de contraseña ───────────────────────
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  // SHA-256 del token (el token crudo SOLO viaja en el link; nunca en la DB)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ─────────────────────── Geografía: ciudades y sectores ───────────────────────
+
+model City {
+  id     String  @id @default(cuid())
+  name   String
+  state  String // entidad federal (ej: Bolívar)
+  lat    Float
+  lng    Float
+  active Boolean @default(true)
+
+  @@unique([name, state])
+}
+
+// cityName es denormalizado: guarda el MISMO valor exacto de Provider.city
+model Sector {
+  id       String  @id @default(cuid())
+  cityName String
+  name     String
+  // CENTRO | NORTE | SUR | ESTE | OESTE
+  zone     String  @default("CENTRO")
+  lat      Float?
+  lng      Float?
+  active   Boolean @default(true)
+
+  @@unique([cityName, name])
+}
+
+// ─────────────────────── CRM del prestador ───────────────────────
+
+model CrmContact {
+  id         String    @id @default(cuid())
+  providerId String
+  // Cliente registrado de la plataforma (null si es contacto manual sin cuenta)
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  name       String
+  phone      String?
+  email      String?
+  petName    String?
+  petType    String?
+  // NUEVO | ACTIVO | VIP | INACTIVO
+  status     String    @default("NUEVO")
+  // MANUAL | RESERVA
+  source     String    @default("MANUAL")
+  notes      String?
+  totalVisits    Int     @default(0)
+  totalSpentUsd  Float   @default(0)
+  lastVisitAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now())
+
+  @@index([providerId, userId])
+}
+
+// ─────────────────────── Agenda del prestador ───────────────────────
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  providerId  String
+  title       String
+  // Fecha "YYYY-MM-DD" (naive, sin zona horaria — estilo del proyecto)
+  date        String
+  startTime   String? // "HH:MM"
+  durationMin Int?
+  // MANUAL | RESERVA | RECORDATORIO
+  type        String   @default("MANUAL")
+  // PENDIENTE | CONFIRMADO | COMPLETADO | CANCELADO
+  status      String   @default("PENDIENTE")
+  contactId   String? // enlace opcional con CrmContact
+  clientName  String?
+  phone       String?
+  petName     String?
+  address     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([providerId, date])
+}
+
+// ─────────────────────── Firulais 🐕 (asistente FAQ) ───────────────────────
+
+// Entradas de conocimiento del asistente (FAQ). keywords separadas por coma,
+// en minúsculas y sin acentos (el matching normaliza igual).
+model FirulaisEntry {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  keywords  String   @default("")
+  active    Boolean  @default(true)
+  hits      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}
+
+// Log de preguntas NO respondidas por la base de conocimiento (para entrenar)
+model FirulaisLog {
+  id        String   @id @default(cuid())
+  question  String
+  matched   Boolean  @default(false)
+  entryId   String?
+  createdAt DateTime @default(now())
 }

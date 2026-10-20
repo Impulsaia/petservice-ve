@@ -35,6 +35,10 @@ export async function POST(req: Request) {
   if (!user || !ok) {
     return jsonError("Correo o contraseña incorrectos", 401);
   }
+  // Cuentas desactivadas por el admin: mismo flujo pero mensaje explícito
+  if (!user.active) {
+    return jsonError("Cuenta desactivada. Contacta al administrador.", 403);
+  }
 
   const res = NextResponse.json({
     user: { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone },

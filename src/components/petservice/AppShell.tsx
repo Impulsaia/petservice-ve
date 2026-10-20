@@ -79,7 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="font-display text-lg font-black tracking-tight">
                 PetService <span className="text-accent-foreground rounded-md bg-accent px-1 py-0.5 text-xs font-black">VE</span>
               </span>
-              <span className="text-[11px] text-muted-foreground">Bolívar: Guayana · Orinoco · Upata 🐾</span>
+              <span className="text-[11px] text-muted-foreground">Venezuela 🇻🇪 · Guayana · Orinoco · +29 ciudades 🐾</span>
             </span>
           </button>
 
@@ -170,7 +170,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="font-display font-black">PetService VE</span>
             </div>
             <p className="max-w-xs text-sm text-muted-foreground">
-              El marketplace de servicios a domicilio para mascotas del estado Bolívar. Prestadores verificados en Puerto Ordaz, San Félix, Ciudad Bolívar y Upata. Precios en USD y Bs.
+              El marketplace de servicios a domicilio para mascotas en toda Venezuela 🇻🇪. Prestadores verificados (activos hoy en Bolívar, llegando a 29 ciudades). Precios en USD y Bs.
             </p>
           </div>
           <div className="text-sm">
@@ -196,8 +196,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="border-t border-border/60">
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-muted-foreground">
-            <span>© {new Date().getFullYear()} PetService VE — Demo MVP · Datos sintéticos de Guayana</span>
-            <span>Hecho con 🐾 en el estado Bolívar 🇻🇪</span>
+            <span>© {new Date().getFullYear()} PetService VE — Demo MVP · Datos sintéticos de Guayana · Expandiendo a toda Venezuela</span>
+            <span>Hecho con 🐾 en Venezuela 🇻🇪</span>
           </div>
         </div>
       </footer>

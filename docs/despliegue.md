@@ -127,8 +127,47 @@ Turso es SQLite distribuido basado en libSQL — el schema de Prisma funciona ca
 |---|---|---|
 | `DATABASE_URL` | ✅ | `file:./db/custom.db` en dev; `libsql://…` (Turso) o `postgresql://…` (Neon) en prod |
 | `AUTH_SECRET` | ✅ en prod | Secreto HMAC de las sesiones. `openssl rand -hex 32`. Si falta en dev, se autogenera en `db/.auth-secret` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Habilita el login "Continuar con Google" (OAuth 2.0). Sin ellas el botón redirige a `/?loginError=google_no_configurado` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | — | Envío real del correo de recuperación de contraseña. Sin SMTP la app funciona en **modo demo** |
 
-## 6) Mantenimiento
+## 7) OAuth con Google
+
+PetService VE permite "Continuar con Google" (OAuth 2.0 puro, sin next-auth).
+Para activarlo:
+
+1. Ve a [console.cloud.google.com](https://console.cloud.google.com) → crea (o elige) un proyecto.
+2. **APIs y servicios → Pantalla de consentimiento OAuth**: tipo *Externo*, nombre de la app, correo de soporte. Alcances: `openid`, `email`, `profile` (no sensibles).
+3. **Credenciales → Crear credenciales → ID de cliente OAuth** → Tipo *Aplicación web*.
+4. **Orígenes JavaScript autorizados**: `https://TU-DOMINIO` (y `http://localhost:3000` para desarrollo).
+5. **URIs de redirección autorizadas**: `https://TU-DOMINIO/api/auth/google/callback` (y `http://localhost:3000/api/auth/google/callback`).
+6. Copia el **Client ID** y el **Client Secret** a las variables `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` y redeploy.
+
+Cómo funciona: `GET /api/auth/google` genera un `state` aleatorio que se guarda en
+una cookie HttpOnly (anti-CSRF) y redirige a Google; el callback
+`/api/auth/google/callback` valida el state, intercambia el `code` por tokens,
+lee el perfil y hace upsert del usuario **por email** (si ya existía mantiene su
+rol y solo linkea `googleId`/`avatarUrl`; si no, crea un CLIENT activo) y abre
+sesión con el mismo mecanismo HMAC del login local.
+
+## 8) Recuperación de contraseña (demo vs producción)
+
+El flujo es `POST /api/auth/forgot-password {email}` → token aleatorio de 32
+bytes → en la DB **solo se guarda su SHA-256** (`PasswordReset.tokenHash`) con
+expiración de **30 minutos** y un solo uso; `POST /api/auth/reset-password
+{token, password}` actualiza la contraseña (scrypt) e invalida otros resets
+pendientes.
+
+- **Modo demo (sin SMTP):** la respuesta de forgot-password incluye
+  `{ demo: true, resetUrl: "/restablecer?token=…" }` para poder probar el flujo
+  completo sin servidor de correo. ⚠️ **Nunca exponer esto en producción.**
+- **Producción (con SMTP):** configura `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+  `SMTP_PASS` y `SMTP_FROM`. Con esas variables presentes la API deja de
+  devolver el link y el enlace se envía **solo por correo** (la respuesta HTTP
+  es siempre genérica, anti-enumeración, y está rate-limited a 3/h por IP).
+  Basta cualquier SMTP transaccional (Resend, Brevo, Mailgun, SES) — el envío
+  con `nodemailer` queda como TODO marcado en la ruta.
+
+## 9) Mantenimiento
 
 - **Backups:** en Turso, `turso db export` programado; en Railway/Render, snapshot del volumen.
 - **Logs:** Vercel → Deployments → Functions; Railway/Render → Logs en vivo.

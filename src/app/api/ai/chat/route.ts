@@ -3,12 +3,16 @@ import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
 import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 import { ZONES } from "@/lib/petservice/constants";
+import { matchFirulais } from "@/lib/petservice/firulais";
 
 /**
  * POST /api/ai/chat — Asistente del cliente (IA transversal con guardrails)
- * - Contexto real: catálogo, zonas, tasa del día (RAG-lite sobre la DB)
- * - Guardrails: no diagnósticos veterinarios, no inventar precios, derivar a humano
- * - Memoria: últimos 10 mensajes de la conversación (stateless)
+ * 1. Firulais 🐕 (FAQ determinista): match contra FirulaisEntry activas ANTES
+ *    del LLM — si responde, se incrementa hits (fire-and-forget) y no hay
+ *    costo de LLM. Las preguntas sin match se loguean (FirulaisLog) para
+ *    entrenar la base de conocimiento.
+ * 2. LLM con guardrails: no diagnósticos veterinarios, no inventar precios,
+ *    catálogo real inyectado, derivar a humano.
  */
 
 export const maxDuration = 60;
@@ -35,6 +39,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "messages requerido" }, { status: 400 });
   }
 
+  // ── 1) Firulais 🐕: FAQ determinista antes del LLM ──
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  if (lastUser?.content) {
+    try {
+      const entries = await db.firulaisEntry.findMany({ where: { active: true } });
+      const match = matchFirulais(lastUser.content, entries);
+      if (match) {
+        // Fire-and-forget: el contador de hits nunca bloquea la respuesta
+        void db.firulaisEntry.update({ where: { id: match.entryId }, data: { hits: { increment: 1 } } }).catch(() => {});
+        return NextResponse.json({ reply: match.answer, source: "firulais", entryId: match.entryId, score: match.score });
+      }
+      // Miss: se guarda la pregunta (máx 200 chars) para entrenar la FAQ
+      await db.firulaisLog.create({ data: { question: lastUser.content.slice(0, 200), matched: false } });
+    } catch (e) {
+      console.error("Firulais matching error (continúa con LLM):", e);
+    }
+  }
+
   // Contexto real de la plataforma (catálogo compacto)
   const [providers, settings] = await Promise.all([
     db.provider.findMany({
@@ -51,7 +73,7 @@ export async function POST(req: Request) {
     .map((p) => `${p.businessName} (${p.zoneName}, ${p.city}, ⭐${p.ratingAvg}): ${p.services.map((s) => `${s.name} [${s.category}] $${s.priceUsd}`).join("; ")}`)
     .join("\n");
 
-  const systemPrompt = `Eres "Toby", el asistente virtual de PetService VE 🐾, un marketplace venezolano de servicios a domicilio para mascotas (peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi, spa móvil y VETERINARIA: consultas, vacunación, desparasitación y certificados de salud). Operas en el ESTADO BOLÍVAR, Venezuela.
+  const systemPrompt = `Eres "Firulais", el asistente virtual de PetService VE 🐾, un marketplace venezolano de servicios a domicilio para mascotas (peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi, spa móvil y VETERINARIA: consultas, vacunación, desparasitación y certificados de salud). Empezamos en el estado Bolívar (Puerto Ordaz, San Félix, Ciudad Bolívar y Upata) y estamos EXPANDIENDO a toda Venezuela 🇻🇪.
 
 REGLAS ESTRICTAS:
 1. Responde SIEMPRE en español venezolano (como en Guayana), tono cálido, cercano y útil (máximo ~120 palabras). Usa emojis con moderación 🐶. Puedes usar expresiones criollas con moderación: "a la orden", "chamo/chama", "estamos a la orden". Trata al usuario de "tú".
@@ -60,7 +82,7 @@ REGLAS ESTRICTAS:
 4. No procesas pagos ni cancelaciones: explica el flujo (el cliente paga con Pago Móvil/transferencia/Zelle/Binance/efectivo, sube la referencia, el admin la concilia) y deriva a soporte humano si el usuario insiste.
 5. Si no sabes algo o piden hablar con una persona, sugiere el botón "Hablar con humano" o el WhatsApp +58 412 555 0000.
 6. Para ayudar a reservar: explica que puede tocar un prestador → "Reservar ahora" y elegir servicio, mascota, dirección, horario y método de pago.
-7. Puedes recomendar prestadores del catálogo según zona, tipo de mascota (perro, gato o "michi") y presupuesto. Cobertura: ${[...new Set(ZONES.map((z) => z.city))].join(", ")}. Si preguntan por una zona sin prestadores, sugiere la ciudad más cercana del catálogo.
+7. Puedes recomendar prestadores del catálogo según zona, tipo de mascota (perro, gato o "michi") y presupuesto. Cobertura activa hoy: ${[...new Set(ZONES.map((z) => z.city))].join(", ")}. Si preguntan por otra ciudad de Venezuela, explica que estamos expandiendo y sugiere revisar la sección de Ciudades.
 8. Si preguntan por horarios de atención general: la plataforma es 24/7 y cada prestador muestra su horario en su perfil.
 
 CATÁLOGO REAL (actualizado hoy):
@@ -87,7 +109,7 @@ MÉTODOS DE PAGO: Pago Móvil (Banco de Venezuela, con número de referencia), T
     // Degradación elegante: respuesta predefinida si la IA falla
     return NextResponse.json({
       reply:
-        "🐾 ¡Hola! Soy Toby de PetService VE. Estoy teniendo un problemita técnico ahora mismo 😅 pero no te preocupes: puedes explorar prestadores verificados cerca de ti en la página principal, o escríbenos al WhatsApp +58 412 555 0000 y te atendemos al instante.",
+        "🐾 ¡Hola! Soy Firulais de PetService VE. Estoy teniendo un problemita técnico ahora mismo 😅 pero no te preocupes: puedes explorar prestadores verificados cerca de ti en la página principal, o escríbenos al WhatsApp +58 412 555 0000 y te atendemos al instante.",
       fallback: true,
     });
   }

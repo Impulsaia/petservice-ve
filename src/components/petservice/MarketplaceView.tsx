@@ -1,18 +1,48 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, MapPin, PawPrint, List, Map as MapIcon, Sparkles, ShieldCheck, Clock3, BadgePercent, Loader2 } from "lucide-react";
+import { Search, MapPin, PawPrint, List, Map as MapIcon, Sparkles, ShieldCheck, Clock3, BadgePercent, Loader2, Globe, ChevronDown, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
 import { CATEGORIES, ZONES, CITIES, type CategoryKey } from "@/lib/petservice/constants";
 import { ProviderCard, ProviderCardSkeleton, MapPanel, type ProviderListItem } from "@/components/petservice/marketplace-parts";
 import { toast } from "sonner";
+
+// ─────────────── Alcance nacional: ciudades y sectores (DB) ───────────────
+
+interface CityInfo {
+  id: string;
+  name: string;
+  state: string;
+  lat: number;
+  lng: number;
+  active: boolean;
+  providerCount: number;
+}
+
+interface SectorInfo {
+  id: string;
+  cityName: string;
+  name: string;
+  zone: string | null;
+  lat: number;
+  lng: number;
+}
+
+/** centro por defecto de una ciudad: primera zona conocida (Bolívar) o coords de la DB */
+function centerForCity(name: string, info?: CityInfo | null): { label: string; lat: number; lng: number } | undefined {
+  const z = ZONES.find((zz) => zz.city === name);
+  if (z) return { label: z.name, lat: z.lat, lng: z.lng };
+  if (info) return { label: name, lat: info.lat, lng: info.lng };
+  return undefined;
+}
 
 export function MarketplaceView() {
   const { filters, setFilters, resetFilters, loc, setLoc, city, setCity, settings, dataTick } = useAppStore();
@@ -23,6 +53,108 @@ export function MarketplaceView() {
   const [heroOk, setHeroOk] = useState(true);
   const [aiThinking, setAiThinking] = useState(false);
   const mapAsideRef = useRef<HTMLElement>(null);
+
+  // ── Nacional: 29 ciudades de la DB + sectores por ciudad ──
+  const [cities, setCities] = useState<CityInfo[] | null>(null);
+  const [sectors, setSectors] = useState<SectorInfo[]>([]);
+  const [selectedSector, setSelectedSector] = useState<SectorInfo | null>(null);
+  const [citiesOpen, setCitiesOpen] = useState(false);
+  const [cityQuery, setCityQuery] = useState("");
+
+  // Ciudades: al montar y cada vez que se abre el popover (mantiene contadores frescos)
+  useEffect(() => {
+    let alive = true;
+    apiGet<{ cities: CityInfo[] }>("/api/cities")
+      .then((d) => alive && setCities(d.cities))
+      .catch(() => {}); // sin bloquear la UI si falla
+    return () => {
+      alive = false;
+    };
+  }, [citiesOpen]);
+
+  // Sectores: SOLO se refetchean al cambiar de ciudad (sin loops)
+  useEffect(() => {
+    let alive = true;
+    setSelectedSector(null);
+    apiGet<{ sectors: SectorInfo[] }>(`/api/sectors?city=${encodeURIComponent(city)}`)
+      .then((d) => alive && setSectors(d.sectors ?? []))
+      .catch(() => alive && setSectors([]));
+    return () => {
+      alive = false;
+    };
+  }, [city]);
+
+  // Si el usuario mueve la búsqueda (tap del mapa, GPS, IA…), el chip de sector se desmarca
+  useEffect(() => {
+    setSelectedSector((prev) =>
+      prev && (Math.abs(prev.lat - loc.lat) > 1e-6 || Math.abs(prev.lng - loc.lng) > 1e-6) ? null : prev
+    );
+  }, [loc]);
+
+  const currentCityInfo = useMemo(() => cities?.find((c) => c.name === city) ?? null, [cities, city]);
+  /** ciudad activa sin prestadores → estado "Próximamente" (mapa + lista) */
+  const vacantCity = currentCityInfo && currentCityInfo.providerCount === 0 ? currentCityInfo : null;
+
+  const cityGroups = useMemo(() => {
+    const list = cities ?? [];
+    const q = cityQuery.trim().toLowerCase();
+    const filtered = q
+      ? list.filter((c) => c.name.toLowerCase().includes(q) || c.state.toLowerCase().includes(q))
+      : list;
+    const byState = new Map<string, CityInfo[]>();
+    for (const c of filtered) {
+      const arr = byState.get(c.state);
+      if (arr) arr.push(c);
+      else byState.set(c.state, [c]);
+    }
+    // estados con prestadores primero, luego alfabético
+    return [...byState.entries()].sort((a, b) => {
+      const ap = a[1].some((c) => c.providerCount > 0) ? 0 : 1;
+      const bp = b[1].some((c) => c.providerCount > 0) ? 0 : 1;
+      return ap - bp || a[0].localeCompare(b[0], "es");
+    });
+  }, [cities, cityQuery]);
+
+  /** elige ciudad desde el popover: con prestadores → busca; sin prestadores → modo "Próximamente" */
+  function chooseCity(c: CityInfo) {
+    setCitiesOpen(false);
+    setCityQuery("");
+    setFilters({ zone: null });
+    if (c.providerCount > 0) {
+      setSelectedSector(null);
+      setCity(c.name, centerForCity(c.name, c));
+      if (!ZONES.some((z) => z.city === c.name)) toast.success(`🐾 ${c.providerCount} prestadores en ${c.name}`);
+    } else {
+      setSelectedSector(null);
+      setCity(c.name, { label: `${c.name} (próximamente)`, lat: c.lat, lng: c.lng });
+      toast.info(`🚧 Aún no llegamos a ${c.name} — estamos certificando prestadores en ${c.state}`);
+    }
+  }
+
+  function selectSector(s: SectorInfo) {
+    setSelectedSector(s);
+    setLoc({ label: s.name, lat: s.lat, lng: s.lng });
+    toast.success(`🏘️ Buscando en ${s.name}${s.zone ? ` · ${s.zone}` : ""}`);
+  }
+
+  function clearSector() {
+    setSelectedSector(null);
+    const center = centerForCity(city, currentCityInfo);
+    if (center) setCity(city, center);
+  }
+
+  function becomeProvider(cityName: string, stateName: string) {
+    useAppStore.getState().setView("login");
+    toast.info(`En «Crear cuenta» elige rol Prestador 🧑‍🍳 — así certificamos nuevos negocios en ${cityName} (${stateName})`);
+  }
+
+  function goBackToBolivar() {
+    const active = cities?.find((c) => c.providerCount > 0);
+    const target = active?.name ?? "Puerto Ordaz";
+    setSelectedSector(null);
+    setFilters({ zone: null });
+    setCity(target, centerForCity(target, active ?? undefined));
+  }
 
   // En móvil, al cambiar a la pestaña "Mapa", desplaza suavemente hasta el mapa
   useEffect(() => {
@@ -141,7 +273,7 @@ export function MarketplaceView() {
         <div className="relative grid items-center gap-8 lg:grid-cols-[1.2fr_1fr]">
           <div>
             <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-              <ShieldCheck className="h-3.5 w-3.5" /> Prestadores verificados en el estado Bolívar 🇻🇪
+              <ShieldCheck className="h-3.5 w-3.5" /> Servicios para mascotas a domicilio en toda Venezuela 🇻🇪
             </span>
             <h1 className="font-display text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-[2.75rem]">
               Tu mascota feliz,
@@ -149,8 +281,9 @@ export function MarketplaceView() {
               <span className="text-accent">sin salir de casa</span> 🐾
             </h1>
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
-              Peluquería, veterinaria, delivery, pet sitting, paseos y más — a domicilio en Puerto Ordaz, San Félix, Ciudad Bolívar y Upata, con pago en{" "}
-              <strong>USD o Bs.</strong> Prueba la búsqueda con IA: <em>“veterinario para michi en El Roble”</em> ✨
+              Peluquería, veterinaria, delivery, pet sitting, paseos y más — a domicilio en <strong>toda Venezuela</strong> 🇻🇪, con pago en{" "}
+              <strong>USD o Bs.</strong> Activos hoy en Bolívar · llegando pronto a {cities?.length ?? 29} ciudades. Prueba la búsqueda con IA:{" "}
+              <em>“veterinario para michi en El Roble”</em> ✨
             </p>
 
             {/* Búsqueda */}
@@ -201,6 +334,7 @@ export function MarketplaceView() {
                   <button
                     key={c.name}
                     onClick={() => {
+                      setSelectedSector(null);
                       setCity(c.name, z ? { label: z.name, lat: z.lat, lng: z.lng } : undefined);
                       setFilters({ zone: null });
                     }}
@@ -213,36 +347,101 @@ export function MarketplaceView() {
                   </button>
                 );
               })}
-              <span className="ml-2 text-white/70">Zona:</span>
-              <Select
-                value={ZONES.some((z) => z.name === loc.label && z.city === city) ? loc.label : "other"}
-                onValueChange={(v) => {
-                  const z = ZONES.find((x) => x.name === v);
-                  if (z) {
-                    setCity(z.city, { label: z.name, lat: z.lat, lng: z.lng });
-                  }
-                }}
-              >
-                <SelectTrigger size="sm" className="w-auto gap-1.5 rounded-xl border-white/25 bg-white/15 font-bold text-white backdrop-blur hover:bg-white/25 [&>svg]:text-white" aria-label="Seleccionar zona de búsqueda">
-                  <span className="flex items-center gap-1 text-white">
-                    <MapPin className="h-3.5 w-3.5" /> {loc.label}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {ZONES.filter((z) => z.city === city).map((z) => (
-                    <SelectItem key={z.name} value={z.name}>
-                      {z.name}
-                    </SelectItem>
-                  ))}
-                  {!ZONES.some((z) => z.name === loc.label && z.city === city) && (
-                    <SelectItem value="other">📍 {loc.label}</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+
+              {/* Cambiar ubicación: 29 ciudades de Venezuela (Estado → Ciudad) */}
+              <Popover open={citiesOpen} onOpenChange={setCitiesOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className="inline-flex items-center gap-1 rounded-xl bg-white/15 px-2.5 py-1.5 font-bold text-white backdrop-blur transition-colors hover:bg-white/25"
+                    aria-label="Cambiar ubicación: buscar en otra ciudad de Venezuela"
+                  >
+                    <Globe className="h-3.5 w-3.5" /> Cambiar ubicación
+                    <ChevronDown className={cn("h-3 w-3 transition-transform", citiesOpen && "rotate-180")} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[min(92vw,340px)] rounded-2xl p-0 shadow-xl" role="dialog" aria-label="Cambiar ubicación">
+                  <div className="border-b border-border/60 p-3">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={cityQuery}
+                        onChange={(e) => setCityQuery(e.target.value)}
+                        placeholder="Ciudad o estado… ej: Caracas, Zulia"
+                        className="h-9 rounded-xl pl-8 text-sm"
+                        aria-label="Buscar ciudad o estado"
+                      />
+                    </div>
+                    <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      {cities ? `${cities.length} ciudades · ${cities.filter((c) => c.providerCount > 0).length} con prestadores` : "Cargando ciudades…"}
+                    </p>
+                  </div>
+                  <div className="scroll-slim max-h-[300px] overflow-y-auto p-2">
+                    {cityGroups.length === 0 && (
+                      <p className="px-2 py-6 text-center text-xs text-muted-foreground">Sin resultados para “{cityQuery}” 🐾</p>
+                    )}
+                    {cityGroups.map(([state, list]) => (
+                      <div key={state}>
+                        <div className="px-2 pb-1 pt-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">{state}</div>
+                        {list.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => chooseCity(c)}
+                            className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-secondary"
+                            aria-label={`${c.name}, ${state}${c.providerCount > 0 ? ` · ${c.providerCount} prestadores` : " · próximamente"}`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <MapPin className={cn("h-3.5 w-3.5 shrink-0", c.providerCount > 0 ? "text-primary" : "text-muted-foreground/50")} />
+                              <span className="truncate text-sm font-bold">{c.name}</span>
+                              {c.name === city && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
+                            </span>
+                            {c.providerCount > 0 ? (
+                              <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                {c.providerCount} prestadores
+                              </span>
+                            ) : (
+                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">Próximamente</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               <button onClick={useGps} className="inline-flex items-center gap-1 rounded-xl bg-white/15 px-2.5 py-1.5 font-bold text-white backdrop-blur transition-colors hover:bg-white/25">
                 <MapPin className="h-3.5 w-3.5" /> Usar mi ubicación
               </button>
             </div>
+
+            {/* Sectores desde la DB (bajo los chips de ciudad) */}
+            {sectors.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-white/70">Sector:</span>
+                <button
+                  onClick={clearSector}
+                  className={cn(
+                    "rounded-xl px-2.5 py-1.5 font-bold backdrop-blur transition-all",
+                    !selectedSector ? "bg-accent text-accent-foreground shadow" : "bg-white/15 text-white hover:bg-white/25"
+                  )}
+                >
+                  Todos
+                </button>
+                {sectors.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => selectSector(s)}
+                    title={`Zona ${s.zone ?? "—"} · ${s.cityName}`}
+                    className={cn(
+                      "rounded-xl px-2.5 py-1.5 font-bold backdrop-blur transition-all",
+                      selectedSector?.id === s.id ? "bg-accent text-accent-foreground shadow" : "bg-white/15 text-white hover:bg-white/25"
+                    )}
+                  >
+                    🏘️ {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Ilustración hero */}
@@ -384,8 +583,26 @@ export function MarketplaceView() {
             </div>
           </div>
 
-          {/* Grid de prestadores */}
-          {loading ? (
+          {/* Grid de prestadores (o estado "Próximamente" en ciudades sin cobertura) */}
+          {vacantCity ? (
+            <div className={cn("rounded-3xl border-2 border-dashed border-accent/50 bg-card/60 px-6 py-14 text-center shadow-warm", mobileTab === "map" && "hidden md:block")}>
+              <span className="animate-wiggle inline-block text-5xl">🚧</span>
+              <h3 className="mt-3 font-display text-xl font-black">Aún no llegamos a {vacantCity.name}</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+                Estamos certificando prestadores en <strong>{vacantCity.state}</strong>… ¡Sé el primero! 🐾
+                <br />
+                <span className="text-xs">Mientras tanto, activos hoy en Bolívar: Puerto Ordaz, San Félix, Ciudad Bolívar y Upata.</span>
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                <Button onClick={() => becomeProvider(vacantCity.name, vacantCity.state)} className="rounded-xl bg-primary font-bold hover:bg-primary/90">
+                  Quiero ser prestador en {vacantCity.name}
+                </Button>
+                <Button onClick={goBackToBolivar} variant="outline" className="rounded-xl font-bold">
+                  Ver prestadores activos en Bolívar
+                </Button>
+              </div>
+            </div>
+          ) : loading ? (
             <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", mobileTab === "map" && "hidden md:grid")}>
               {[...Array(6)].map((_, i) => <ProviderCardSkeleton key={i} />)}
             </div>
@@ -400,7 +617,7 @@ export function MarketplaceView() {
               <span className="animate-wiggle inline-block text-5xl">🐾</span>
               <h3 className="mt-3 font-display text-lg font-bold">Sin resultados en {loc.label}</h3>
               <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                Prueba ampliando el radio de búsqueda, quitando filtros o cambiando de zona.
+                Prueba ampliando el radio de búsqueda, quitando filtros o cambia de ciudad con 🌎 Cambiar ubicación.
               </p>
               <Button onClick={resetFilters} variant="outline" className="mt-4 rounded-xl font-bold">
                 Limpiar filtros
@@ -414,7 +631,12 @@ export function MarketplaceView() {
         <aside ref={mapAsideRef} className={cn("scroll-mt-20 md:block", mobileTab === "map" ? "block" : "hidden")}>
           <div className="md:sticky md:top-24 h-fit">
             <div className="h-[min(72svh,640px)] md:h-auto">
-              <MapPanel providers={providers ?? []} rate={settings?.usdToBs ?? 40} />
+              <MapPanel
+                providers={vacantCity ? [] : providers ?? []}
+                rate={settings?.usdToBs ?? 40}
+                sector={selectedSector ? { name: selectedSector.name, zone: selectedSector.zone, lat: selectedSector.lat, lng: selectedSector.lng } : null}
+                vacant={vacantCity ? { name: vacantCity.name, state: vacantCity.state } : null}
+              />
             </div>
             <div className="mt-3 hidden grid-cols-3 gap-2 md:grid">
               <div className="rounded-xl border border-border/60 bg-card p-2.5 text-center shadow-sm">
@@ -459,7 +681,7 @@ export function MarketplaceView() {
         <p className="mt-1 text-center text-sm text-muted-foreground">De la búsqueda a las patitas felices en 4 pasos</p>
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { n: 1, emoji: "🔍", t: "Busca", d: "Filtra por zona, servicio o tipo de mascota. Ve prestadores verificados cerca de ti." },
+            { n: 1, emoji: "🔍", t: "Busca", d: "Filtra por sector, ciudad, servicio o tipo de mascota. Ve prestadores verificados cerca de ti en toda Venezuela." },
             { n: 2, emoji: "📅", t: "Agenda", d: "Elige servicio, fecha y hora. Confirma la dirección donde recibirás al prestador." },
             { n: 3, emoji: "💳", t: "Paga como quieras", d: "Pago Móvil, transferencia, Zelle, Binance o efectivo. Tu dinero queda protegido." },
             { n: 4, emoji: "⭐", t: "Califica", d: "Disfruta el servicio, recibe evidencia y deja tu reseña para la comunidad." },
