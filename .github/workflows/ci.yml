@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-build:
+    name: Lint + Build
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./db/ci.db"
+      AUTH_SECRET: "ci-secret-solo-para-pruebas-no-usar-en-produccion"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Instalar dependencias
+        run: bun install --frozen-lockfile
+
+      - name: Generar cliente Prisma
+        run: bun run db:generate
+
+      - name: Crear base de datos (schema push)
+        run: bun run db:push
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Build de producción
+        run: bun run build
+
+      # Seguridad básica: no subir secretos por accidente
+      - name: Verificar que no hay secretos commiteados
+        run: |
+          ! grep -r "AUTH_SECRET=" --include="*.env" --include=".env*" . 2>/dev/null | grep -v ".env.example" | grep -v "ci-secret"
+          ! test -f db/.auth-secret
+          echo "✔ Sin secretos en el repositorio"
