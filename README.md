@@ -1,10 +1,8 @@
 # 🐾 PetService VE
 
-**Marketplace de servicios a domicilio para mascotas del estado Bolívar, Venezuela** 🇻🇪
+**Marketplace de servicios a domicilio para mascotas ** 🇻🇪
 
-Peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi y spa móvil — con **prestadores verificados** en **Puerto Ordaz, San Félix, Ciudad Bolívar y Upata**, pagos en **USD y Bs.** (Pago Móvil, transferencia, Zelle, Binance, efectivo) y **IA** en todo el producto.
-
-> Proyecto demo con datos 100 % sintéticos. Las cuentas, teléfonos y referencias bancarias son ficticios.
+Peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi y spa móvil — con **prestadores verificados**, pagos en **USD y Bs.** (Pago Móvil, transferencia, Zelle, Binance, efectivo) y **IA** en todo el producto.
 
 ---
 
