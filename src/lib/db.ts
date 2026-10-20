@@ -1,24 +1,26 @@
 import { PrismaClient } from '@prisma/client'
-import { copyFileSync, existsSync } from 'fs'
-import path from 'path'
+import { existsSync, renameSync, writeFileSync } from 'fs'
+import { DEMO_DB_BASE64 } from './petservice/demoDb'
 
 /**
  * Modo DEMO para Vercel (serverless):
  * - /var/task es de solo lectura, pero /tmp es escribible por instancia.
- * - La SQLite sembrada viaja dentro del bundle (ver outputFileTracingIncludes en
- *   next.config.ts) y se copia a /tmp en el arranque en frío de cada instancia.
- * - Ideal para demo/presentación. Para producción real: Turso/Neon o Railway
- *   (ver docs/despliegue.md).
+ * - La SQLite sembrada viaja EMBEBIDA en el código (demoDb.ts, base64) y se
+ *   escribe en /tmp durante el arranque en frío de cada instancia. Esto es
+ *   determinista: no depende del file-tracing de Next/Vercel.
+ * - Escrituras de demo funcionan por instancia; los datos se restauran al
+ *   reciclarse. Para producción real: Turso/Neon o Railway (docs/despliegue.md).
  */
 function resolveDemoDatabaseUrl(): string | undefined {
   if (process.env.VERCEL !== '1') return undefined
-  const source = process.env.DEMO_DB_SOURCE
-  if (!source) return undefined
+  if (!DEMO_DB_BASE64) return undefined
   try {
-    const srcPath = path.isAbsolute(source) ? source : path.join(process.cwd(), source)
     const dst = '/tmp/petservice-demo.db'
-    if (!existsSync(dst) && existsSync(srcPath)) {
-      copyFileSync(srcPath, dst)
+    if (!existsSync(dst)) {
+      // Escritura atómica: archivo temporal + rename para evitar DBs parciales
+      const tmp = `/tmp/petservice-demo.$${process.pid}.tmp`
+      writeFileSync(tmp, Buffer.from(DEMO_DB_BASE64, 'base64'))
+      renameSync(tmp, dst)
     }
     return `file:${dst}`
   } catch {

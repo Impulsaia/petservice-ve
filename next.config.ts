@@ -19,12 +19,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // Incluye la DB demo sembrada dentro del bundle en serverless (Vercel).
-  // En tiempo de ejecución se copia a /tmp para permitir escrituras de demo
-  // (ver src/lib/db.ts). En producción real usar DB externa (docs/despliegue.md).
-  outputFileTracingIncludes: {
-    "/**": ["./data/demo-seed.db"],
-  },
+  // Nota: la DB demo viaja embebida en el código (src/lib/petservice/demoDb.ts)
+  // y se escribe en /tmp en serverless — ver src/lib/db.ts. No depende del
+  // file-tracing (inconsistente entre builds remotos y vercel build local).
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
