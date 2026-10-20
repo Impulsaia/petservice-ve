@@ -23,6 +23,9 @@ export interface AppSettings {
   usdToBs: number;
   commissionPct: number;
   defaultRadiusKm: number;
+  usdToBsSource?: string;
+  usdToBsUpdatedAt?: string | null;
+  autoRate?: boolean;
 }
 
 export interface SessionUser {

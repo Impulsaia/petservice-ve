@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
@@ -11,8 +13,9 @@ import { toast } from "sonner";
 import {
   BadgeCheck, Wallet, ShieldAlert, MessageSquareQuote, Settings2, TrendingUp, Sparkles,
   Check, X, Ban, RotateCcw, EyeOff, Eye, Save, Users, Store, CalendarDays, MapPinned,
-  Dog, Zap,
+  Dog, Zap, RefreshCcw, Landmark,
 } from "lucide-react";
+import type { AppSettings } from "@/lib/petservice/store";
 import { apiGet, apiPost, apiPatch } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
 import { fmtUsd, fmtBs, fmtDateTime, fmtRelative } from "@/lib/petservice/format";
@@ -505,13 +508,13 @@ export function AdminPanel() {
             {/* key: reinicializa el form cuando cambian las settings guardadas */}
             {settings && (
               <SettingsForm
-                key={`${settings.usdToBs}-${settings.commissionPct}`}
-                usdToBs={settings.usdToBs}
-                commissionPct={settings.commissionPct}
+                key={`${settings.usdToBs}-${settings.commissionPct}-${String(settings.autoRate)}`}
+                settings={settings}
                 onSaved={(s) => {
                   setSettings(s);
                   toast.success("Configuración guardada 💾");
                 }}
+                onSynced={(s) => setSettings(s)}
               />
             )}
             <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
@@ -552,22 +555,33 @@ export function AdminPanel() {
   );
 }
 
-async function apiPutSettings(usdToBs: number, commissionPct: number) {
+async function apiPutSettings(usdToBs: number, commissionPct: number, autoRate?: boolean) {
   const res = await fetch("/api/settings", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ usdToBs, commissionPct }),
+    body: JSON.stringify({ usdToBs, commissionPct, ...(autoRate === undefined ? {} : { autoRate }) }),
   });
   if (!res.ok) throw new Error("Error guardando");
-  return res.json();
+  return res.json() as Promise<{ settings: AppSettings }>;
 }
 
-/** Formulario de configuración (remontado con key cuando cambian settings) */
-function SettingsForm({ usdToBs, commissionPct, onSaved }: {
-  usdToBs: number; commissionPct: number; onSaved: (s: { usdToBs: number; commissionPct: number; defaultRadiusKm: number }) => void;
+const FUENTE_LABEL: Record<string, string> = {
+  "bcv-dolarapi": "BCV oficial · dolarapi",
+  "bcv-pydolarve": "BCV oficial · pydolarve",
+  "bcv-web": "BCV oficial · bcv.org.ve",
+  manual: "Manual (admin)",
+};
+
+/** Formulario de configuración + tarjeta tasa BCV (remontado con key cuando cambian settings) */
+function SettingsForm({ settings, onSaved, onSynced }: {
+  settings: AppSettings;
+  onSaved: (s: AppSettings) => void;
+  onSynced: (s: AppSettings) => void;
 }) {
-  const [rateInput, setRateInput] = useState(String(usdToBs));
-  const [commInput, setCommInput] = useState(String(commissionPct));
+  const [rateInput, setRateInput] = useState(String(settings.usdToBs));
+  const [commInput, setCommInput] = useState(String(settings.commissionPct));
+  const [autoRate, setAutoRate] = useState(settings.autoRate ?? true);
+  const [syncing, setSyncing] = useState(false);
 
   async function save() {
     try {
@@ -577,6 +591,35 @@ function SettingsForm({ usdToBs, commissionPct, onSaved }: {
       toast.error("Valores inválidos");
     }
   }
+
+  async function toggleAuto(v: boolean) {
+    setAutoRate(v);
+    try {
+      const d = await apiPutSettings(settings.usdToBs, settings.commissionPct, v);
+      onSaved(d.settings);
+      toast.success(v ? "Actualización automática BCV activada 🔄" : "Actualización automática desactivada (tasa manual)");
+    } catch {
+      setAutoRate(!v);
+      toast.error("No se pudo cambiar el ajuste");
+    }
+  }
+
+  async function syncNow() {
+    setSyncing(true);
+    try {
+      const d = await apiPost<{ rate: AppSettings; synced: boolean }>("/api/rate/bcv", {});
+      onSynced({ ...settings, ...d.rate });
+      if (d.synced) toast.success(`Tasa BCV sincronizada: ${d.rate.usdToBs?.toFixed(2)} Bs./$ ✔️`);
+      else toast.info("Sin cambios: ya estaba sincronizada");
+    } catch {
+      toast.error("No se pudo contactar las fuentes BCV (dolarapi/pydolarve/bcv.org.ve)");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const fuente = FUENTE_LABEL[settings.usdToBsSource ?? "manual"] ?? settings.usdToBsSource ?? "manual";
+  const esBcv = (settings.usdToBsSource ?? "").startsWith("bcv");
 
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
@@ -588,7 +631,7 @@ function SettingsForm({ usdToBs, commissionPct, onSaved }: {
             <Input type="number" step="0.01" value={rateInput} onChange={(e) => setRateInput(e.target.value)} className="rounded-xl" />
             <span className="flex items-center text-sm font-bold text-muted-foreground">Bs./$</span>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Se aplica a nuevos cálculos de precios Bs. (manual o API en producción).</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Editarla aquí la marca como manual; la sincronización BCV la retoma luego (salvo que apagues el automático).</p>
         </div>
         <div>
           <Label className="text-xs font-bold">Comisión de plataforma (%)</Label>
@@ -599,6 +642,39 @@ function SettingsForm({ usdToBs, commissionPct, onSaved }: {
         </div>
         <Button onClick={save} className="w-full rounded-xl bg-primary font-bold">
           <Save className="h-4 w-4" /> Guardar configuración
+        </Button>
+      </div>
+
+      {/* ── Tasa BCV automática ── */}
+      <div className="mt-5 rounded-2xl border border-accent/40 bg-accent/10 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="flex items-center gap-1.5 font-display text-sm font-extrabold"><Landmark className="h-4 w-4 text-accent-foreground" /> Tasa BCV automática</h4>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              Fuentes: dolarapi → pydolarve → bcv.org.ve. Se refresca cada hora con tráfico y a diario por cron.
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="font-display text-2xl font-black text-accent-foreground">{settings.usdToBs.toFixed(2)}</div>
+            <div className="text-[10px] font-bold text-muted-foreground">Bs./USD</div>
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+          <Badge variant={esBcv ? "default" : "secondary"} className="rounded-full px-2 py-0.5 text-[10px] font-bold">{fuente}</Badge>
+          {settings.usdToBsUpdatedAt && (
+            <span className="text-muted-foreground">Actualizada {fmtRelative(settings.usdToBsUpdatedAt)}</span>
+          )}
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/60 p-3">
+          <div className="min-w-0">
+            <Label className="text-xs font-bold">Actualización automática</Label>
+            <p className="text-[10px] text-muted-foreground">Si la apagas, la tasa queda fija hasta que la edites a mano.</p>
+          </div>
+          <Switch checked={autoRate} onCheckedChange={toggleAuto} aria-label="Alternar actualización automática de la tasa BCV" />
+        </div>
+        <Button variant="outline" onClick={syncNow} disabled={syncing} className="mt-3 w-full rounded-xl font-bold">
+          <RefreshCcw className={cn("h-4 w-4", syncing && "animate-spin")} />
+          {syncing ? "Sincronizando con BCV…" : "Sincronizar ahora"}
         </Button>
       </div>
     </div>

@@ -194,10 +194,13 @@ model Notification {
 // ────────────────────────────── Configuración ──────────────────────────────
 
 model Settings {
-  id              String @id @default("main")
-  usdToBs         Float  @default(40)
-  commissionPct   Float  @default(15)
-  defaultRadiusKm Float  @default(8)
+  id               String    @id @default("main")
+  usdToBs          Float     @default(40)
+  commissionPct    Float     @default(15)
+  defaultRadiusKm  Float     @default(8)
+  usdToBsSource    String    @default("manual")
+  usdToBsUpdatedAt DateTime?
+  autoRate         Boolean   @default(true)
 }
 
 // ─────────────────────── Recuperación de contraseña ───────────────────────

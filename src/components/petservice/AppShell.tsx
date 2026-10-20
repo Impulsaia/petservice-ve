@@ -121,9 +121,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-2">
-            {/* Tasa del día */}
+            {/* Tasa del día (BCV auto-actualizada) */}
             {settings && (
-              <span className="hidden items-center gap-1.5 rounded-full border border-accent/50 bg-accent/15 px-3 py-1.5 text-xs font-bold text-accent-foreground lg:inline-flex" title="Tasa referencial del día (configurable por admin)">
+              <span
+                className="hidden items-center gap-1.5 rounded-full border border-accent/50 bg-accent/15 px-3 py-1.5 text-xs font-bold text-accent-foreground lg:inline-flex"
+                title={rateTooltip(settings)}
+              >
                 <RefreshCcw className="h-3 w-3" />
                 {settings.usdToBs.toFixed(2)} Bs./$
               </span>
@@ -265,4 +268,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
     </div>
   );
+}
+
+/** Tooltip informativo del badge de tasa (fuente + antigüedad) */
+function rateTooltip(s: { usdToBsSource?: string; usdToBsUpdatedAt?: string | null }): string {
+  const fuente =
+    s.usdToBsSource === "manual"
+      ? "tasa establecida manualmente por el admin"
+      : s.usdToBsSource?.startsWith("bcv")
+        ? "tasa oficial BCV (auto-actualizada)"
+        : "tasa referencial";
+  const cuando = s.usdToBsUpdatedAt ? relTimeEs(s.usdToBsUpdatedAt) : null;
+  return `${fuente}${cuando ? ` · actualizada ${cuando}` : ""}`;
+}
+
+/** "hace 5 min", "hace 2 h", "hace 3 d" */
+function relTimeEs(iso: string): string {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (!isFinite(min)) return "";
+  if (min < 1) return "hace instantes";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
 }
