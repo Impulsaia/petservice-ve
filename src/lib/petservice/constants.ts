@@ -110,7 +110,7 @@ export type Role3 = "CLIENT" | "PROVIDER" | "ADMIN";
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
   { role: "CLIENT", label: "Cliente", name: "María González", email: "maria@demo.ve", password: "demo1234", emoji: "👩", desc: "Reserva y paga servicios para sus 3 mascotas en Puerto Ordaz", chip: "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300" },
-  { role: "PROVIDER", label: "Prestador", name: "Carlos Pérez", email: "carlos@petservice.ve", password: "demo1234", emoji: "🧑‍🎨", desc: "Dueño de Pet Spa VIP · Alta Vista · grooming premium", chip: "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300" },
+  { role: "PROVIDER", label: "Prestador", name: "Ponme Guapo", email: "ponmeguapo@petservice.ve", password: "ponme1234", emoji: "🧑‍🎨", desc: "Dueño de Peluquería Canina Ponme Guapo · Puerto Ordaz · negocio real ✅", chip: "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300" },
   { role: "ADMIN", label: "Administrador", name: "Admin PetService", email: "admin@petservice.ve", password: "admin1234", emoji: "🛡️", desc: "Verifica prestadores, concilia pagos y ve métricas globales", chip: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300" },
 ];
 

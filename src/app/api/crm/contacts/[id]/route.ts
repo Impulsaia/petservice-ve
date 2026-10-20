@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 import { getProviderOf } from "@/lib/petservice/server";
+import { normalizeTagsInput, fetchTagsOf, writeTags } from "../../contact-tags";
 
 const CONTACT_STATUSES = ["NUEVO", "ACTIVO", "VIP", "INACTIVO"];
 const CONTACT_SOURCES = ["MANUAL", "RESERVA"];
@@ -46,12 +47,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     take: 100,
   });
 
-  return NextResponse.json({ contact, historial: { bookings, events } });
+  // tags se lee por SQL crudo (columna nueva: el client en memoria puede ser anterior — ver contact-tags.ts)
+  const tags = await fetchTagsOf(contact.id);
+  return NextResponse.json({ contact: { ...contact, tags }, historial: { bookings, events } });
 }
 
 /**
  * PATCH /api/crm/contacts/[id] — edita un contacto PROPIO.
- * Campos: name, phone, email, petName, petType, status, notes, source.
+ * Campos: name, phone, email, petName, petType, status, notes, source, tags.
+ * tags: string coma-separado (se normaliza: trim, máx 8 etiquetas de 60 chars, dedupe).
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const csrf = sameOriginOrError(req);
@@ -85,6 +89,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.petName !== undefined) data.petName = body.petName ? cleanText(body.petName, 40) : null;
   if (body.petType !== undefined) data.petType = body.petType ? cleanText(body.petType, 20) : null;
   if (body.notes !== undefined) data.notes = body.notes ? cleanText(body.notes, 500) : null;
+  // tags NO va en `data`: se escribe por SQL crudo tras el update (columna nueva — ver contact-tags.ts)
   if (body.status !== undefined) {
     const status = cleanText(body.status, 12).toUpperCase();
     if (!CONTACT_STATUSES.includes(status)) return jsonError(`Status debe ser: ${CONTACT_STATUSES.join(", ")}`, 400);
@@ -97,7 +102,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const updated = await db.crmContact.update({ where: { id }, data });
-  return NextResponse.json({ contact: updated });
+  if (body.tags !== undefined) await writeTags(id, normalizeTagsInput(body.tags));
+  const tags = await fetchTagsOf(id);
+  return NextResponse.json({ contact: { ...updated, tags } });
 }
 
 /** DELETE /api/crm/contacts/[id] — elimina un contacto PROPIO (los eventos quedan con contactId suelto → se limpia) */

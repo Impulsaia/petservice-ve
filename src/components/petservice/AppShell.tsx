@@ -216,8 +216,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="border-t border-border/60">
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-muted-foreground">
-            <span>© {new Date().getFullYear()} PetService VE — Demo MVP · Datos sintéticos de Guayana · Expandiendo a toda Venezuela</span>
-            <span>Hecho con 🐾 en Venezuela 🇻🇪</span>
+            <span>© {new Date().getFullYear()} PetService VE — Directorio de negocios reales de mascotas · Venezuela 🇻🇪</span>
+            <span>
+              Datos de negocios ©{" "}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline decoration-dotted hover:text-foreground">
+                OpenStreetMap
+              </a>{" "}
+              contributors (ODbL) · Hecho con 🐾
+            </span>
           </div>
         </div>
       </footer>

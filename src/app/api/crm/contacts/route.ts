@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 import { getProviderOf } from "@/lib/petservice/server";
+import { normalizeTagsInput, fetchTagsByProvider, writeTags } from "../contact-tags";
 
 const CONTACT_STATUSES = ["NUEVO", "ACTIVO", "VIP", "INACTIVO"];
 const CONTACT_SOURCES = ["MANUAL", "RESERVA"];
@@ -9,6 +10,7 @@ const CONTACT_SOURCES = ["MANUAL", "RESERVA"];
 /**
  * GET /api/crm/contacts — contactos CRM del prestador autenticado.
  * Query: ?q=texto&status=VIP&source=RESERVA&sort=recent|name|visits|spent
+ * La búsqueda q también cubre las etiquetas (tags coma-separadas).
  * Respuesta: { contacts: [...], stats: { total, activos, vip, ingresos, nuevos30d } }
  */
 export async function GET(req: Request) {
@@ -27,15 +29,9 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = { providerId: provider.id };
   if (CONTACT_STATUSES.includes(status)) where.status = status;
   if (CONTACT_SOURCES.includes(source)) where.source = source;
-  if (q) {
-    where.OR = [
-      { name: { contains: q } },
-      { phone: { contains: q } },
-      { email: { contains: q } },
-      { petName: { contains: q } },
-      { notes: { contains: q } },
-    ];
-  }
+  // q NO va en el `where`: `tags` es columna nueva y el client en memoria puede ser
+  // anterior (Unknown argument). Se busca en JS tras traer los contactos (case-insensitive,
+  // incluye etiquetas). Ver contact-tags.ts.
 
   const orderBy =
     sort === "name" ? { name: "asc" as const }
@@ -43,7 +39,17 @@ export async function GET(req: Request) {
     : sort === "spent" ? { totalSpentUsd: "desc" as const }
     : { lastVisitAt: "desc" as const };
 
-  const contacts = await db.crmContact.findMany({ where, orderBy, take: 300 });
+  const rows = await db.crmContact.findMany({ where, orderBy, take: 300 });
+  // tags se lee por SQL crudo (columna nueva — ver contact-tags.ts)
+  const tagsById = await fetchTagsByProvider(provider.id);
+  const needle = q.toLowerCase();
+  const contacts = rows
+    .map((c) => ({ ...c, tags: tagsById.get(c.id) ?? "" }))
+    .filter((c) =>
+      !needle ||
+      [c.name, c.phone, c.email, c.petName, c.notes, c.tags]
+        .some((v) => (v ?? "").toLowerCase().includes(needle))
+    );
 
   // Stats sobre TODOS los contactos del prestador (no solo los filtrados)
   const all = await db.crmContact.findMany({
@@ -64,7 +70,8 @@ export async function GET(req: Request) {
 
 /**
  * POST /api/crm/contacts — crea un contacto manual (sin cuenta en la plataforma).
- * Body: { name, phone?, email?, petName?, petType?, notes?, status? }
+ * Body: { name, phone?, email?, petName?, petType?, notes?, status?, tags? }
+ * tags: string coma-separado (se normaliza: trim, máx 8 etiquetas de 60 chars, dedupe).
  */
 export async function POST(req: Request) {
   const csrf = sameOriginOrError(req);
@@ -94,6 +101,7 @@ export async function POST(req: Request) {
     if (dup) return jsonError("Ya existe un contacto con ese nombre y teléfono", 409);
   }
 
+  const tags = normalizeTagsInput(body.tags);
   const contact = await db.crmContact.create({
     data: {
       providerId: provider.id,
@@ -107,5 +115,7 @@ export async function POST(req: Request) {
       source: "MANUAL",
     },
   });
-  return NextResponse.json({ contact }, { status: 201 });
+  // tags va por SQL crudo (columna nueva — ver contact-tags.ts)
+  await writeTags(contact.id, tags);
+  return NextResponse.json({ contact: { ...contact, tags } }, { status: 201 });
 }

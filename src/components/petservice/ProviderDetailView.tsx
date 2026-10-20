@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, MapPin, ShieldCheck, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote, Landmark } from "lucide-react";
+import { ArrowLeft, MapPin, ShieldCheck, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote, Landmark, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -160,8 +160,14 @@ export function ProviderDetailView() {
                       {cm.label}
                     </span>
                     <div className="text-right leading-tight">
-                      <div className="font-display text-lg font-black text-primary">{fmtUsd(s.priceUsd)}</div>
-                      <div className="text-[11px] font-semibold text-muted-foreground">≈ {fmtBs(s.priceUsd * rate)}</div>
+                      {s.priceUsd > 0 ? (
+                        <>
+                          <div className="font-display text-lg font-black text-primary">{fmtUsd(s.priceUsd)}</div>
+                          <div className="text-[11px] font-semibold text-muted-foreground">≈ {fmtBs(s.priceUsd * rate)}</div>
+                        </>
+                      ) : (
+                        <div className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold text-secondary-foreground">💬 A consultar</div>
+                      )}
                     </div>
                   </div>
                   <h3 className="mt-2 font-display text-base font-extrabold">{s.name}</h3>
@@ -183,12 +189,31 @@ export function ProviderDetailView() {
                     </div>
                   )}
 
-                  <Button
-                    onClick={() => openBooking({ providerId: provider.id, serviceId: s.id })}
-                    className="mt-3 w-full rounded-xl bg-primary font-bold hover:bg-primary/90"
-                  >
-                    <CalendarPlus className="h-4 w-4" /> Reservar ahora
-                  </Button>
+                  {s.priceUsd > 0 ? (
+                    <Button
+                      onClick={() => openBooking({ providerId: provider.id, serviceId: s.id })}
+                      className="mt-3 w-full rounded-xl bg-primary font-bold hover:bg-primary/90"
+                    >
+                      <CalendarPlus className="h-4 w-4" /> Reservar ahora
+                    </Button>
+                  ) : provider.phone ? (
+                    <Button
+                      asChild
+                      className="mt-3 w-full rounded-xl bg-[#25D366] font-bold text-white hover:bg-[#25D366]/90"
+                    >
+                      <a
+                        href={waLink(provider.phone, `Hola ${provider.businessName}, vi su negocio en PetService VE y me interesa: ${s.name}. ¿Me pueden dar precios y disponibilidad? 🐾`) ?? "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MessageCircle className="h-4 w-4" /> Consultar por WhatsApp
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button disabled variant="outline" className="mt-3 w-full rounded-xl font-bold">
+                      Teléfono no publicado
+                    </Button>
+                  )}
                 </article>
               );
             })}

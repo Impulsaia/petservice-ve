@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  Clock, History, Loader2, MapPin, MessageCircle, Pencil, Trash2,
+  Clock, History, Loader2, MapPin, MessageCircle, MessageSquareQuote, Pencil, Tag, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,7 @@ export interface ServiceItem {
 export interface ContactItem {
   id: string; name: string; phone: string | null; email: string | null;
   petName: string | null; petType: string | null; status: string; source: string;
-  notes: string | null; totalVisits: number; totalSpentUsd: number;
+  notes: string | null; tags: string; totalVisits: number; totalSpentUsd: number;
   lastVisitAt: string | null; createdAt: string; updatedAt: string;
 }
 
@@ -121,6 +121,93 @@ const CONTACT_STATUS_META: Record<string, { label: string; chip: string }> = {
 export function ContactStatusBadge({ status }: { status: string }) {
   const meta = CONTACT_STATUS_META[status] ?? { label: status, chip: "bg-muted text-muted-foreground" };
   return <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold", meta.chip)}>{meta.label}</span>;
+}
+
+// ───────────────────── Etiquetas (tags) del CRM-lite WhatsApp ─────────────────────
+
+export const MAX_TAGS = 8;
+export const MAX_TAG_LEN = 60;
+
+/** Chips de etiquetas rápidas (clic para añadir/quitar en el formulario). */
+export const TAG_SUGGESTIONS = ["VIP", "Adeuda", "Gatos", "Perros", "Emergencia", "Promo"] as const;
+
+/** "a,b , c" → ["a","b","c"] (trim, sin vacíos). */
+export function parseTags(tags: string | null | undefined): string[] {
+  if (!tags) return [];
+  return tags.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+/** Normaliza la entrada libre del formulario (mismas reglas que la API: trim, máx 8 de 60, dedupe case-insensitive). */
+export function normalizeTagsStr(raw: string): string {
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const piece of raw.split(",")) {
+    const tag = piece.trim().slice(0, MAX_TAG_LEN);
+    if (!tag) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+    if (tags.length >= MAX_TAGS) break;
+  }
+  return tags.join(",");
+}
+
+/** Badges pequeños de etiquetas para listas/tarjetas. */
+export function TagBadges({ tags, className }: { tags: string | null | undefined; className?: string }) {
+  const list = parseTags(tags);
+  if (list.length === 0) return null;
+  return (
+    <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
+      {list.map((t) => (
+        <span key={t.toLowerCase()} className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+          <Tag className="h-2.5 w-2.5" aria-hidden /> {t}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Editor de etiquetas: input libre coma-separado + chips rápidas para clicar. */
+export function TagEditor({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const active = new Set(parseTags(value).map((t) => t.toLowerCase()));
+  function toggle(tag: string) {
+    const list = parseTags(value);
+    const next = active.has(tag.toLowerCase())
+      ? list.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+      : [...list, tag];
+    onChange(normalizeTagsStr(next.join(",")));
+  }
+  return (
+    <div>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {TAG_SUGGESTIONS.map((t) => {
+          const on = active.has(t.toLowerCase());
+          return (
+            <button
+              key={t} type="button" onClick={() => toggle(t)} aria-pressed={on}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors",
+                on
+                  ? "border-amber-500 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                  : "border-border/70 bg-secondary/40 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+              )}
+            >
+              <Tag className="h-3 w-3" aria-hidden /> {t}
+            </button>
+          );
+        })}
+      </div>
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="O escribe las tuyas separadas por coma: Urgencias, Baño senior…"
+        className="mt-2 rounded-xl text-xs"
+        aria-label="Etiquetas separadas por coma"
+      />
+      <p className="mt-1 text-[10px] text-muted-foreground">Máx. {MAX_TAGS} etiquetas de {MAX_TAG_LEN} caracteres. Servirán para filtrar y contactar por grupos.</p>
+    </div>
+  );
 }
 
 export function EventStatusChip({ status }: { status: string }) {
@@ -426,13 +513,15 @@ interface ContactHistorial {
   events: HistorialEvent[];
 }
 
-export function ContactDialog({ open, onOpenChange, contact, businessName, onSaved, onDeleted }: {
+export function ContactDialog({ open, onOpenChange, contact, businessName, onSaved, onDeleted, onOpenTemplates }: {
   open: boolean; onOpenChange: (v: boolean) => void;
   contact: ContactItem | null; businessName: string;
   onSaved: () => void; onDeleted: () => void;
+  /** Abre el diálogo de plantillas de WhatsApp con este contacto preseleccionado. */
+  onOpenTemplates?: (c: ContactItem) => void;
 }) {
   const isEdit = !!contact;
-  const [form, setForm] = useState({ name: "", phone: "", email: "", petName: "", petType: "", status: "NUEVO", notes: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", petName: "", petType: "", status: "NUEVO", notes: "", tags: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -447,7 +536,7 @@ export function ContactDialog({ open, onOpenChange, contact, businessName, onSav
       setForm({
         name: contact.name, phone: contact.phone ?? "", email: contact.email ?? "",
         petName: contact.petName ?? "", petType: contact.petType ?? "",
-        status: contact.status, notes: contact.notes ?? "",
+        status: contact.status, notes: contact.notes ?? "", tags: contact.tags ?? "",
       });
       setHistLoading(true);
       apiGet<{ historial: ContactHistorial }>(`/api/crm/contacts/${contact.id}`)
@@ -455,7 +544,7 @@ export function ContactDialog({ open, onOpenChange, contact, businessName, onSav
         .catch(() => setHistorial(null))
         .finally(() => setHistLoading(false));
     } else {
-      setForm({ name: "", phone: "", email: "", petName: "", petType: "", status: "NUEVO", notes: "" });
+      setForm({ name: "", phone: "", email: "", petName: "", petType: "", status: "NUEVO", notes: "", tags: "" });
     }
   }, [open, contact]);
 
@@ -475,6 +564,7 @@ export function ContactDialog({ open, onOpenChange, contact, businessName, onSav
         name: form.name.trim(), phone: form.phone.trim() || null, email: form.email.trim() || null,
         petName: form.petName.trim() || null, petType: form.petType || null,
         status: form.status, notes: form.notes.trim() || null,
+        tags: normalizeTagsStr(form.tags),
       };
       if (isEdit && contact) await apiPatch(`/api/crm/contacts/${contact.id}`, body);
       else await apiPost("/api/crm/contacts", body);
@@ -572,6 +662,10 @@ export function ContactDialog({ open, onOpenChange, contact, businessName, onSav
             </Select>
           </div>
           <div className="sm:col-span-2">
+            <Label className="flex items-center gap-1.5 text-xs font-bold"><Tag className="h-3.5 w-3.5" /> Etiquetas</Label>
+            <TagEditor value={form.tags} onChange={(tags) => setForm((f) => ({ ...f, tags }))} />
+          </div>
+          <div className="sm:col-span-2">
             <Label className="text-xs font-bold">Notas internas</Label>
             <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="mt-1 rounded-2xl" placeholder="Preferencias, alergias, recordatorios de seguimiento…" />
           </div>
@@ -601,6 +695,15 @@ export function ContactDialog({ open, onOpenChange, contact, businessName, onSav
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          )}
+          {isEdit && contact?.phone && onOpenTemplates && (
+            <Button
+              variant="outline" onClick={() => onOpenTemplates(contact)}
+              className="rounded-xl font-bold text-[#128C4A] hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+              title="Enviar una plantilla de WhatsApp a este cliente"
+            >
+              <MessageSquareQuote className="h-4 w-4" /> Plantilla
+            </Button>
           )}
           {isEdit && contact?.phone && (
             <WaButton

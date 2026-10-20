@@ -259,6 +259,8 @@ model CrmContact {
   petType    String?
   // NUEVO | ACTIVO | VIP | INACTIVO
   status     String    @default("NUEVO")
+  // Etiquetas libres separadas por coma: "Gatos,Adeuda,Emergencia" (CRM-lite WhatsApp)
+  tags       String    @default("")
   // MANUAL | RESERVA
   source     String    @default("MANUAL")
   notes      String?

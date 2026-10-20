@@ -101,11 +101,17 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
         <div className="flex items-center gap-2">
           {p.minPriceUsd !== null && (
             <div className="text-right leading-none">
-              <div className="text-[10px] text-muted-foreground">desde</div>
-              <div className="font-display text-sm font-extrabold text-primary">
-                {fmtUsd(p.minPriceUsd)}
-                <span className="ml-1 text-[10px] font-semibold text-muted-foreground">{fmtBs(p.minPriceUsd * rate)}</span>
-              </div>
+              {p.minPriceUsd > 0 ? (
+                <>
+                  <div className="text-[10px] text-muted-foreground">desde</div>
+                  <div className="font-display text-sm font-extrabold text-primary">
+                    {fmtUsd(p.minPriceUsd)}
+                    <span className="ml-1 text-[10px] font-semibold text-muted-foreground">{fmtBs(p.minPriceUsd * rate)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">💬 A consultar</div>
+              )}
             </div>
           )}
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-secondary text-muted-foreground transition-all group-hover:bg-primary group-hover:text-primary-foreground">

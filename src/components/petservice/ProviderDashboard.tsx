@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, FilterX,
-  LayoutDashboard, MapPin, MessageCircle, MessageSquareQuote, Pencil, Play, Plus, Search,
+  CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FilterX,
+  LayoutDashboard, MapPin, MessageCircle, MessageSquareQuote, Pencil, Play, Plus, QrCode, Search,
   Scissors, Sparkles, Star, Trash2, TrendingUp, Users, Wallet, XCircle,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,8 +37,13 @@ import { ConsultasIA } from "@/components/petservice/ConsultasIA";
 import {
   apiDelete, BookingDetailDialog, CalEventItem, ContactDialog, ContactItem, ContactStatusBadge,
   CrmStats, EVENT_STATUS_META, EVENT_TYPE_META, EventFormDialog, MonthGrid,
-  ProviderBookingItem, ServiceCard, ServiceFormDialog, ServiceItem, Spin, StatCard, WaButton,
+  ProviderBookingItem, ServiceCard, ServiceFormDialog, ServiceItem, Spin, StatCard, TagBadges, WaButton,
+  parseTags,
 } from "@/components/petservice/provider-parts";
+import {
+  BulkContactPanel, QrDialog, TagFilterBar, TemplatesDialog,
+  exportContactsCsv, exportContactsVcf,
+} from "@/components/petservice/provider-crm-parts";
 
 interface ProviderInfo {
   id: string; businessName: string; status: string; ratingAvg: number; ratingCount: number; zoneName: string; city: string;
@@ -52,7 +57,7 @@ const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "
 interface UpcomingRowData { key: string; date: string; time: string; title: string; type: string; status: string; sub: string; }
 
 export function ProviderDashboard() {
-  const { bumpData, settings, setSettings } = useAppStore();
+  const { bumpData, settings, setSettings, user } = useAppStore();
   const rate = settings?.usdToBs ?? 40;
   const [tab, setTab] = useState("resumen");
 
@@ -84,6 +89,12 @@ export function ProviderDashboard() {
   const [cRefresh, setCRefresh] = useState(0);
   const [cLoading, setCLoading] = useState(true);
   const [crmDialog, setCrmDialog] = useState<ContactItem | "NEW" | null>(null);
+  // CRM-lite WhatsApp (Task 26-d): etiquetas + plantillas + QR
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplContactId, setTplContactId] = useState<string | null>(null);
+  const [tplVersion, setTplVersion] = useState(0);
+  const [qrOpen, setQrOpen] = useState(false);
 
   // ── Calendario ──
   const [cursor, setCursor] = useState(() => {
@@ -192,6 +203,43 @@ export function ProviderDashboard() {
     const t = setTimeout(loadContacts, 300);
     return () => clearTimeout(t);
   }, [loadContacts, cRefresh]);
+
+  // CRM-lite WhatsApp: todas las etiquetas existentes + contactos filtrados por etiqueta activa
+  const allTags = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const c of contacts ?? []) {
+      for (const t of parseTags(c.tags)) {
+        const k = t.toLowerCase();
+        if (!seen.has(k)) seen.set(k, t);
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b, "es"));
+  }, [contacts]);
+
+  const shownContacts = useMemo(() => {
+    if (!contacts) return null;
+    if (!tagFilter) return contacts;
+    const k = tagFilter.toLowerCase();
+    return contacts.filter((c) => parseTags(c.tags).some((t) => t.toLowerCase() === k));
+  }, [contacts, tagFilter]);
+
+  function exportCsv() {
+    if (!shownContacts || shownContacts.length === 0) {
+      toast.error("No hay contactos para exportar");
+      return;
+    }
+    exportContactsCsv(shownContacts);
+    toast.success(`CSV descargado (${shownContacts.length} contacto${shownContacts.length === 1 ? "" : "s"}) 📄`);
+  }
+
+  function exportVcf() {
+    if (!shownContacts || shownContacts.length === 0) {
+      toast.error("No hay contactos para exportar");
+      return;
+    }
+    exportContactsVcf(shownContacts);
+    toast.success(`vCard descargada (${shownContacts.length} contacto${shownContacts.length === 1 ? "" : "s"}) 📇`);
+  }
 
   // Reservas filtradas (server-side) con debounce
   const bActive = !!(bStatus !== "all" || bFrom || bTo || bService !== "all" || bQ.trim());
@@ -552,7 +600,37 @@ export function ProviderDashboard() {
         <TabsContent value="crm" className="mt-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-extrabold">🤝 CRM de clientes</h2>
-            <Button onClick={() => setCrmDialog("NEW")} className="rounded-xl font-bold"><Plus className="h-4 w-4" /> Nuevo cliente</Button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                variant="outline" onClick={() => { setTplContactId(null); setTplOpen(true); }}
+                className="rounded-xl font-bold text-[#128C4A] hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                title="Mensajes rápidos con variables ({cliente}, {mascota}…)"
+              >
+                <MessageSquareQuote className="h-4 w-4" /> <span className="hidden sm:inline">Plantillas</span>
+              </Button>
+              <Button
+                variant="outline" onClick={() => setQrOpen(true)}
+                className="rounded-xl font-bold"
+                title="QR de WhatsApp para que tus clientes te escriban"
+              >
+                <QrCode className="h-4 w-4" /> <span className="hidden sm:inline">Mi QR</span>
+              </Button>
+              <Button
+                variant="outline" onClick={exportCsv}
+                className="rounded-xl font-bold"
+                title="Descargar los contactos filtrados (CSV para Excel)"
+              >
+                <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
+              </Button>
+              <Button
+                variant="outline" onClick={exportVcf}
+                className="rounded-xl font-bold"
+                title="Descargar los contactos filtrados (vCard para tu teléfono)"
+              >
+                <Download className="h-4 w-4" /> <span className="hidden md:inline">vCard</span>
+              </Button>
+              <Button onClick={() => setCrmDialog("NEW")} className="rounded-xl font-bold"><Plus className="h-4 w-4" /> Nuevo cliente</Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -597,11 +675,25 @@ export function ProviderDashboard() {
             </Select>
           </div>
 
-          {contacts === null || (cLoading && contacts === null) ? (
+          {contacts !== null && <TagFilterBar tags={allTags} active={tagFilter} onToggle={(t) => setTagFilter((cur) => (cur?.toLowerCase() === t.toLowerCase() ? null : t))} onClear={() => setTagFilter(null)} />}
+
+          {tagFilter && shownContacts && shownContacts.length > 0 && (
+            <BulkContactPanel
+              key={tplVersion}
+              contacts={shownContacts}
+              tag={tagFilter}
+              providerId={provider?.id ?? user?.id ?? "demo"}
+              businessName={provider?.businessName ?? "PetService VE"}
+              onEditTemplates={() => { setTplContactId(null); setTplOpen(true); }}
+              refreshKey={tplVersion}
+            />
+          )}
+
+          {shownContacts === null || (cLoading && shownContacts === null) ? (
             <div className="flex justify-center py-10"><Spin className="h-6 w-6 text-muted-foreground" /></div>
-          ) : contacts.length === 0 ? (
-            cQ || cStatus !== "all" || cSource !== "all" ? (
-              <EmptyState emoji="🔍" title="Sin clientes con esos filtros" desc="Prueba con otro término o estado." />
+          ) : shownContacts.length === 0 ? (
+            cQ || cStatus !== "all" || cSource !== "all" || tagFilter ? (
+              <EmptyState emoji="🔍" title="Sin clientes con esos filtros" desc="Prueba con otro término, estado o etiqueta." />
             ) : (
               <EmptyState
                 emoji="🗂️" title="Tu CRM está vacío"
@@ -627,7 +719,7 @@ export function ProviderDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {contacts.map((c) => (
+                      {shownContacts.map((c) => (
                         <TableRow key={c.id} onClick={() => setCrmDialog(c)} className="cursor-pointer">
                           <TableCell>
                             <div className="flex items-center gap-2.5">
@@ -637,6 +729,7 @@ export function ProviderDashboard() {
                                 <div className="text-[11px] text-muted-foreground">
                                   {c.petName ? `${c.petType === "GATO" ? "🐱" : c.petType === "PERRO" ? "🐶" : "🐾"} ${c.petName}` : "sin mascota registrada"}
                                 </div>
+                                <TagBadges tags={c.tags} className="mt-0.5" />
                               </div>
                             </div>
                           </TableCell>
@@ -654,6 +747,15 @@ export function ProviderDashboard() {
                                   label="" title={`Chatear con ${c.name}`} className="px-2.5"
                                 />
                               )}
+                              {c.phone && (
+                                <Button
+                                  size="sm" variant="outline" title="Enviar plantilla de WhatsApp"
+                                  onClick={(e) => { e.stopPropagation(); setTplContactId(c.id); setTplOpen(true); }}
+                                  className="h-8 rounded-lg px-2.5 text-xs font-bold text-[#128C4A] hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                >
+                                  <MessageSquareQuote className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" onClick={() => setCrmDialog(c)} className="h-8 rounded-lg px-2.5 text-xs font-bold">Ver</Button>
                             </div>
                           </TableCell>
@@ -665,7 +767,7 @@ export function ProviderDashboard() {
               </div>
               {/* Tarjetas (móvil) */}
               <div className="space-y-2 md:hidden">
-                {contacts.map((c) => (
+                {shownContacts.map((c) => (
                   <button key={c.id} type="button" onClick={() => setCrmDialog(c)} className="w-full rounded-2xl border border-border/70 bg-card p-3 text-left shadow-sm transition-colors hover:bg-secondary/40">
                     <div className="flex items-center gap-2.5">
                       <Avatar name={c.name} className="h-10 w-10 text-xs" />
@@ -681,6 +783,7 @@ export function ProviderDashboard() {
                       <span>últ. {c.lastVisitAt ? fmtDateShort(c.lastVisitAt) : "—"}</span>
                       {c.petName && <span>{c.petType === "GATO" ? "🐱" : c.petType === "PERRO" ? "🐶" : "🐾"} {c.petName}</span>}
                     </div>
+                    <TagBadges tags={c.tags} className="mt-1.5" />
                   </button>
                 ))}
               </div>
@@ -1010,7 +1113,34 @@ export function ProviderDashboard() {
         businessName={provider?.businessName ?? "PetService VE"}
         onSaved={() => setCRefresh((x) => x + 1)}
         onDeleted={() => setCRefresh((x) => x + 1)}
+        onOpenTemplates={(c) => { setCrmDialog(null); setTplContactId(c.id); setTplOpen(true); }}
       />
+
+      {/* CRM-lite WhatsApp (Task 26-d): plantillas + QR — montados solo al abrirlos */}
+      {tplOpen && (
+        <TemplatesDialog
+          onOpenChange={(v) => {
+            if (!v) {
+              setTplOpen(false);
+              setTplContactId(null);
+              setTplVersion((x) => x + 1); // refresca el panel de contacto masivo si estaba visible
+            }
+          }}
+          providerId={provider?.id ?? user?.id ?? "demo"}
+          businessName={provider?.businessName ?? "PetService VE"}
+          contacts={contacts ?? []}
+          initialContactId={tplContactId}
+          onSavedTemplates={() => setTplVersion((x) => x + 1)}
+        />
+      )}
+
+      {qrOpen && (
+        <QrDialog
+          onOpenChange={(v) => !v && setQrOpen(false)}
+          providerPhone={user?.phone ?? null}
+          businessName={provider?.businessName ?? "PetService VE"}
+        />
+      )}
 
       <EventFormDialog
         open={!!eventDialog}
