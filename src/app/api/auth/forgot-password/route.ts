@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { rateLimit, clientIp, sameOriginOrError, readJson, isValidEmail, jsonError, cleanText } from "@/lib/petservice/auth";
+import { sendRecoveryEmail } from "@/lib/petservice/mailer";
 
 /**
  * POST /api/auth/forgot-password — { email }
@@ -10,10 +11,9 @@ import { rateLimit, clientIp, sameOriginOrError, readJson, isValidEmail, jsonErr
  * si el correo existe o no). Si existe:
  *  - Crea PasswordReset con token aleatorio de 32 bytes (hex); en la DB solo
  *    se guarda el SHA-256 del token. Expira en 30 minutos.
- *  - MODO DEMO (sin SMTP configurado): incluye `demo: true` y `resetUrl` en la
- *    respuesta para poder probar el flujo end-to-end. ⚠️ En producción NUNCA
- *    devolver el token: configurar SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM y
- *    enviar el link por correo (ver docs/despliegue.md).
+ *  - Con RESEND_API_KEY configurada: envía el enlace POR CORREO real (Resend).
+ *  - MODO DEMO (sin mailer): incluye `demo: true` y `resetUrl` en la respuesta
+ *    para probar el flujo end-to-end. ⚠️ Nunca devolver el token en producción.
  *
  * Rate limit: 3 peticiones/hora por IP.
  */
@@ -45,17 +45,19 @@ export async function POST(req: Request) {
   });
   console.log(`[SEGURIDAD] PasswordReset creado para ${email} (expira en 30 min)`);
 
-  // Modo demo: sin SMTP se devuelve el link para probar el flujo completo.
-  const smtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-  if (!smtpConfigured) {
-    return NextResponse.json({
-      ...generic,
-      demo: true,
-      resetUrl: `/restablecer?token=${token}`,
-      note: "Modo demo: SMTP no configurado, el enlace de reset se devuelve en la respuesta. En producción se enviaría por correo.",
-    });
+  // 1) Producción: con RESEND_API_KEY configurada el enlace llega POR CORREO real.
+  const origin = new URL(req.url).origin;
+  const resetUrl = `${origin}/restablecer?token=${token}`;
+  const mail = await sendRecoveryEmail(user.email, resetUrl, user.name);
+  if (mail.sent) {
+    return NextResponse.json(generic);
   }
 
-  // TODO producción: enviar email con SMTP (nodemailer) a user.email con el link.
-  return NextResponse.json(generic);
+  // 2) Modo demo (sin mailer): se devuelve el link para probar el flujo completo.
+  return NextResponse.json({
+    ...generic,
+    demo: true,
+    resetUrl: `/restablecer?token=${token}`,
+    note: "Modo demo: no hay proveedor de correo (RESEND_API_KEY). El enlace de reset se devuelve en la respuesta.",
+  });
 }

@@ -11,7 +11,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const p = await db.provider.findUnique({
     where: { id },
     include: {
-      user: { select: { name: true } },
+      user: { select: { name: true, phone: true } },
       services: { where: { active: true }, orderBy: { priceUsd: "asc" } },
       reviews: {
         where: { hidden: false },
@@ -34,6 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       id: p.id,
       businessName: p.businessName,
       ownerName: p.user.name,
+      phone: p.user.phone,
       bio: p.bio,
       status: p.status,
       city: p.city,

@@ -587,6 +587,28 @@ export async function seedAll() {
   console.log(`   - Prestadores: ${await db.provider.count()} | Servicios: ${await db.service.count()}`);
   console.log(`   - Reservas: ${await db.booking.count()} | Reseñas: ${await db.review.count()}`);
   console.log(`   - Notificaciones: ${await db.notification.count()}`);
+
+  // ──────────────── Negocios REALES del estado Bolívar (Excel 20-oct-2026) ────────────────
+  // Importa ~75 negocios verificados en fuentes públicas con badge "REAL" ✅.
+  // Idempotente: si ya existen (reseed parcial), no se duplican.
+  try {
+    const { syncRealBusinesses } = await import("@/lib/petservice/real-bolivar");
+    const real = await syncRealBusinesses();
+    console.log(`   - Negocios reales importados: ${real.created} (omitidos: ${real.skipped})`);
+  } catch (err) {
+    console.warn("⚠️ No se pudieron importar los negocios reales:", err instanceof Error ? err.message : err);
+  }
+
+  // ──────────────── Usuario real del propietario (para probar recuperación) ────────────────
+  const sergioEmail = "sergioromeroinforma@gmail.com";
+  const sergioExists = await db.user.findUnique({ where: { email: sergioEmail } });
+  if (!sergioExists) {
+    const pwdSergio = await hashPassword("demo1234");
+    await db.user.create({
+      data: { email: sergioEmail, name: "Sergio Romero", phone: "+58 414 0000000", role: "CLIENT", passwordHash: pwdSergio },
+    });
+    console.log(`   - Usuario real registrado: ${sergioEmail} (clave demo1234 — cámbiala con "Recuperar contraseña")`);
+  }
 }
 
 /** helper local para el log de notificación del prestador carlos */

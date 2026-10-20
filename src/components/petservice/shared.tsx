@@ -39,7 +39,12 @@ export function RatingStars({ value, count, size = "sm", className }: {
         ))}
       </span>
       <span className={cn("font-semibold", size === "xs" ? "text-xs" : "text-sm")}>{value.toFixed(1)}</span>
-      {count !== undefined && <span className="text-xs text-muted-foreground">({count})</span>}
+      {count !== undefined && count > 0 && <span className="text-xs text-muted-foreground">({count})</span>}
+      {count === 0 && value > 0 && (
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground" title="Calificación de la ficha pública en Google Maps, no de reservas en la plataforma">
+          Google Maps
+        </span>
+      )}
     </span>
   );
 }

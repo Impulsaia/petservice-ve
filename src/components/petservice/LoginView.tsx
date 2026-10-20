@@ -641,6 +641,14 @@ function ForgotPasswordDialog({ open, onOpenChange, onDone }: {
                 </div>
               )}
 
+              {sentMsg && !demoUrl && (
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  🧪 <strong>Modo demo:</strong> no se envían correos reales todavía. Si tu cuenta existe, el enlace
+                  aparece aquí mismo en verde. ¿No apareció? Ese correo no está registrado en la demo — crea tu cuenta
+                  en la pestaña <strong>"Crear cuenta"</strong> e inténtalo de nuevo.
+                </p>
+              )}
+
               {demoUrl && (
                 <div className="rounded-xl border border-amber-300/70 bg-amber-50 p-3.5 dark:border-amber-500/40 dark:bg-amber-950/40">
                   <p className="text-xs font-black text-amber-800 dark:text-amber-300">🧪 Modo demo: aquí está tu enlace directo</p>

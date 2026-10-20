@@ -59,6 +59,11 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
                 Sin verificar
               </span>
             )}
+            {p.badges.includes("REAL") && (
+              <span title="Negocio real: datos verificados en fuentes públicas (Google Maps y directorios) — oct 2026" className="inline-flex items-center rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-black text-teal-800 dark:bg-teal-950/60 dark:text-teal-300">
+                Real
+              </span>
+            )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <RatingStars value={p.ratingAvg} count={p.ratingCount} size="xs" />

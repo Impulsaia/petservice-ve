@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, MapPin, ShieldCheck, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote } from "lucide-react";
+import { ArrowLeft, MapPin, ShieldCheck, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,12 +9,12 @@ import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
 import { categoryMeta, PET_SIZES, PET_SPECIES } from "@/lib/petservice/constants";
-import { fmtUsd, fmtBs, fmtDateShort, fmtRelative } from "@/lib/petservice/format";
+import { fmtUsd, fmtBs, fmtDateShort, fmtRelative, waLink } from "@/lib/petservice/format";
 import { Avatar, CategoryIcon, EmptyState, RatingStars } from "@/components/petservice/shared";
 
 interface Detail {
   provider: {
-    id: string; businessName: string; ownerName: string; bio: string; status: string;
+    id: string; businessName: string; ownerName: string; phone?: string | null; bio: string; status: string;
     city: string; zoneName: string; lat: number; lng: number; radiusKm: number;
     scheduleJson: string; ratingAvg: number; ratingCount: number; badges: string;
   };
@@ -84,6 +84,17 @@ export function ProviderDetailView() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pb-1">
+              {provider.phone && waLink(provider.phone, `¡Hola ${provider.businessName}! 👋 Los contacté desde PetService VE 🐾`) && (
+                <a
+                  href={waLink(provider.phone, `¡Hola ${provider.businessName}! 👋 Los contacté desde PetService VE 🐾`) ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Consultar directamente por WhatsApp"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#25D366] px-3 text-xs font-bold text-white transition-colors hover:bg-[#1ebe5b]"
+                >
+                  <MessageSquareQuote className="h-3.5 w-3.5" /> Consultar por WhatsApp
+                </a>
+              )}
               {provider.badges.split(",").filter(Boolean).map((b) => (
                 <span
                   key={b}
@@ -92,14 +103,16 @@ export function ProviderDetailView() {
                     b === "VERIFICADO" && "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
                     b === "TOP" && "bg-accent text-accent-foreground",
                     b === "GATOS" && "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
-                    b === "EXPRESS" && "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300"
+                    b === "EXPRESS" && "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300",
+                    b === "REAL" && "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
                   )}
                 >
                   {b === "VERIFICADO" && <ShieldCheck className="h-3.5 w-3.5" />}
                   {b === "TOP" && <Star className="h-3.5 w-3.5" />}
                   {b === "GATOS" && "🐈"}
                   {b === "EXPRESS" && "⚡"}
-                  {b === "VERIFICADO" ? "Identidad verificada" : b === "TOP" ? "Top calificado" : b === "GATOS" ? "Amigable con gatos" : "Entrega express"}
+                  {b === "REAL" && <Landmark className="h-3.5 w-3.5" />}
+                  {b === "VERIFICADO" ? "Identidad verificada" : b === "TOP" ? "Top calificado" : b === "GATOS" ? "Amigable con gatos" : b === "REAL" ? "✅ Negocio real" : "Entrega express"}
                 </span>
               ))}
             </div>
