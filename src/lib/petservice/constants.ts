@@ -63,7 +63,16 @@ export const ZONES: Zone[] = [
   { name: "Villa Colombia", city: "Puerto Ordaz", lat: 8.2752, lng: -62.7657 },
   { name: "Cachamay", city: "Puerto Ordaz", lat: 8.2735, lng: -62.7245 },
   { name: "La Llovizna", city: "Puerto Ordaz", lat: 8.2608, lng: -62.7312 },
+  // Sectores este/sur de Puerto Ordaz (pedidos por usuarios del sector)
+  { name: "Core 8", city: "Puerto Ordaz", lat: 8.268, lng: -62.743 },
+  { name: "Guamo", city: "Puerto Ordaz", lat: 8.2771, lng: -62.7765 },
+  { name: "Villa Bahía", city: "Puerto Ordaz", lat: 8.263, lng: -62.732 },
+  { name: "Río Negro", city: "Puerto Ordaz", lat: 8.2656, lng: -62.746 },
+  { name: "Minifincas", city: "Puerto Ordaz", lat: 8.253, lng: -62.737 },
+  { name: "Toro Muerto", city: "Puerto Ordaz", lat: 8.27, lng: -62.726 },
+  { name: "Santa Rosa", city: "Puerto Ordaz", lat: 8.2588, lng: -62.7836 },
   // San Félix (municipio Caroní — orilla este del Caroní) y zonas circunvecinas
+  { name: "Gran Sabana", city: "San Félix", lat: 8.2266, lng: -62.8278 },
   { name: "San Félix Centro", city: "San Félix", lat: 8.2506, lng: -62.8047 },
   { name: "El Roble", city: "San Félix", lat: 8.2550, lng: -62.7930 },
   { name: "Los Olivos", city: "San Félix", lat: 8.2646, lng: -62.8176 },

@@ -125,6 +125,13 @@ export async function seedAll() {
   } catch (err) {
     console.warn("⚠️ OpenStreetMap:", err instanceof Error ? err.message : err);
   }
+  try {
+    const { syncZoneBusinesses } = await import("@/lib/petservice/real-zones");
+    const zonas = await syncZoneBusinesses();
+    console.log(`   - Negocios reales zonas solicitadas: +${zonas.created} (omitidos: ${zonas.skipped})`);
+  } catch (err) {
+    console.warn("⚠️ Zonas solicitadas:", err instanceof Error ? err.message : err);
+  }
 
   // ── 6) Prestador demo: credenciales conocidas sobre un negocio REAL ──
   const ponme = await db.provider.findFirst({ where: { businessName: { contains: "Ponme Guapo" } }, include: { user: true } });
