@@ -1,0 +1,66 @@
+{
+ "sector:core8": {
+  "lat": 8.268,
+  "lng": -62.743,
+  "est": true
+ },
+ "sector:gran-sabana": {
+  "lat": 8.2265701,
+  "lng": -62.8277511,
+  "label": "Ambulatorio Gran Sabana, Avenida 04, Parroquia Unare, Municipio Caroní, Bolívar, Venezuela"
+ },
+ "sector:guamo": {
+  "lat": 8.2771069,
+  "lng": -62.7765481,
+  "label": "SAIME, C.C. Guayana Mall, Redoma La Piña, Complejo Residencial Las Islas, Parroquia Unare, Municipio Caroní, B"
+ },
+ "sector:villa-bahia": {
+  "lat": 8.263,
+  "lng": -62.732,
+  "est": true
+ },
+ "sector:rio-negro": {
+  "lat": 8.2655633,
+  "lng": -62.7459786,
+  "label": "VICTGourmet, Food Park Puerto Ordaz, Avenida Guarapiche, Parroquia Unare, Municipio Caroní, Bolívar, 8050, Ven"
+ },
+ "sector:minifincas": {
+  "lat": 8.253,
+  "lng": -62.737,
+  "est": true
+ },
+ "sector:toro-muerto": {
+  "lat": 8.27,
+  "lng": -62.726,
+  "est": true
+ },
+ "sector:santa-rosa": {
+  "lat": 8.2587628,
+  "lng": -62.7836327,
+  "label": "Parroquia Santa Rosa Mística, Calle Suapure, Parroquia Unare, Municipio Caroní, Bolívar, Venezuela"
+ },
+ "biz:calle-ventuari": null,
+ "biz:av-guarapiche": {
+  "lat": 8.2817457,
+  "lng": -62.7508385,
+  "label": "Supermercado Guayana, C.A., Edificio Nadwa, Avenida Guarapiche, Urbanización Río Yocoima, Parroquia Unare, Mun"
+ },
+ "biz:cc-buganvilla": null,
+ "biz:cc-caroni-plaza": {
+  "lat": 8.2680757,
+  "lng": -62.7543985,
+  "label": "C.C. San Carlos, Avenida EW-A, Complejo Residencial Río Aro Plaza, Parroquia Unare, Municipio Caroní, Bolívar,"
+ },
+ "biz:av-paseo-caroni": {
+  "lat": 8.2818184,
+  "lng": -62.7583299,
+  "label": "Materiales Puerto Ordaz, Avenida Paseo Caroní, Parroquia Unare, Municipio Caroní, Bolívar, 8050, Venezuela"
+ },
+ "biz:calle-el-tablazo": null,
+ "biz:av-baralt-sf": null,
+ "biz:cc-orinokia": {
+  "lat": 8.292495,
+  "lng": -62.7443733,
+  "label": "Anfiteatro del Orinokia, Avenida Las Américas, Parroquia Universidad, Municipio Caroní, Bolívar, 8050, Venezue"
+ }
+}
