@@ -217,3 +217,20 @@
 .dark .leaflet-container {
   background: #0c1412;
 }
+
+/* Halo pulsante dorado: doble resaltado (4+★ Google Y 4+★ PetService) en el mapa */
+.ps-pin-halo-gold {
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  border-radius: 9999px;
+  border: 3px solid rgba(245, 158, 11, 0.85);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.5);
+  animation: psHaloPulse 1.8s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes psHaloPulse {
+  0% { transform: scale(0.55); opacity: 0.95; }
+  70% { transform: scale(1.2); opacity: 0; }
+  100% { transform: scale(1.2); opacity: 0; }
+}

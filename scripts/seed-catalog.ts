@@ -14,7 +14,7 @@ const db = new PrismaClient();
 // Ciudades de Bolívar con centros conocidos (coinciden con CITY_BOUNDS de geo.ts)
 const BOLIVAR_CENTERS: { name: string; state: string; lat: number; lng: number }[] = [
   { name: "Puerto Ordaz", state: "Bolívar", lat: 8.2735, lng: -62.7625 },
-  { name: "San Félix", state: "Bolívar", lat: 8.2388, lng: -62.795 },
+  { name: "San Félix", state: "Bolívar", lat: 8.34754, lng: -62.64713 }, // orilla ESTE del Caroní (nodo place OSM)
   { name: "Ciudad Bolívar", state: "Bolívar", lat: 8.1225, lng: -63.5475 },
   { name: "Upata", state: "Bolívar", lat: 8.0194, lng: -62.4066 },
 ];

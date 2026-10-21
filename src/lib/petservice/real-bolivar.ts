@@ -185,6 +185,51 @@ function parsePhones(telefonos: string): string[] {
 interface SectorLite { name: string; lat: number | null; lng: number | null }
 interface CityLite { name: string; lat: number; lng: number }
 
+// ───────────────── Plus Code (Open Location Code) ─────────────────
+// Las direcciones investigadas traen el Plus Code de la ficha de Google Maps,
+// que codifica la posición EXACTA del negocio. Se decodifica con recuperación
+// de prefijo dentro de la celda 1°×1° de la ciudad (unívoco).
+const OL_ALPH = "23456789CFGHJMPQRVWX";
+const CITY_CELL_REF: Record<string, [number, number]> = {
+  "Puerto Ordaz": [8.28, -62.76],
+  "San Félix": [8.34, -62.66],
+  "Ciudad Bolívar": [8.12, -63.55],
+  Upata: [8.02, -62.41],
+};
+
+function decodeOlcFull(code: string): { lat: number; lng: number } {
+  const c = code.replace("+", "");
+  let lat = -90, lng = -180;
+  const res = [20, 1, 0.05, 0.0025, 0.000125];
+  for (let i = 0; i < 5; i++) {
+    lat += OL_ALPH.indexOf(c[i * 2]) * res[i];
+    lng += OL_ALPH.indexOf(c[i * 2 + 1]) * res[i];
+  }
+  return { lat: +lat.toFixed(5), lng: +lng.toFixed(5) };
+}
+
+const PLUS_CODE_RE = /\b[23456789CFGHJMPQRVWX]{4}\s*\+\s*[23456789CFGHJMPQRVWX]{2,3}\b/;
+
+/** Extrae y decodifica el Plus Code de una dirección; null si no hay o es inválido. */
+export function plusCodeFromDireccion(direccion: string, cityName: string): { lat: number; lng: number } | null {
+  const ref = CITY_CELL_REF[cityName];
+  if (!ref) return null;
+  const m = direccion.match(PLUS_CODE_RE);
+  if (!m) return null;
+  try {
+    let lat = ref[0] + 90, lng = ref[1] + 180, full = "";
+    for (const r of [20, 1, 0.05, 0.0025, 0.000125]) full += OL_ALPH[Math.floor(lat / r) % 20] + OL_ALPH[Math.floor(lng / r) % 20];
+    const short = m[0].replace(/\s/g, "").replace("+", "");
+    const prefixLen = 8 - m[0].split("+")[0].replace(/\s/g, "").length;
+    const decoded = decodeOlcFull(full.slice(0, prefixLen) + short);
+    // sanity: dentro de la celda de referencia (±0.5°)
+    if (Math.abs(decoded.lat - ref[0]) > 0.5 || Math.abs(decoded.lng - ref[1]) > 0.5) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 function matchSector(address: string, sectors: SectorLite[]): SectorLite | null {
   const na = norm(address);
   const sorted = [...sectors].sort((a, b) => b.name.length - a.name.length);
@@ -315,8 +360,11 @@ export async function syncRealBusinesses(log = false): Promise<SyncResult> {
 
     const base = sector?.lat != null && sector?.lng != null ? { lat: sector.lat, lng: sector.lng } : { lat: city.lat, lng: city.lng };
     const jitter = (offset: number) => ((hash01(row.nombre + offset) - 0.5) * 2) * 0.006;
-    const lat = base.lat + jitter("lat") + (sector ? 0 : (hash01(row.nombre) - 0.5) * 0.03);
-    const lng = base.lng + jitter("lng") + (sector ? 0 : (hash01(row.nombre + "x") - 0.5) * 0.03);
+    // Coordenadas exactas si la dirección trae el Plus Code de la ficha de Google
+    // (decodificación unívoca dentro de la celda 1°×1° de la ciudad).
+    const pc = plusCodeFromDireccion(row.direccion, city.name);
+    const lat = pc?.lat ?? base.lat + jitter("lat") + (sector ? 0 : (hash01(row.nombre) - 0.5) * 0.03);
+    const lng = pc?.lng ?? base.lng + jitter("lng") + (sector ? 0 : (hash01(row.nombre + "x") - 0.5) * 0.03);
 
     const phones = row.telefonos ? row.telefonos.split(" · ").filter(Boolean) : [];
     const mainPhone = phones.find((p) => /412|414|416|424|426/.test(p)) ?? phones[0] ?? null;
@@ -350,6 +398,8 @@ export async function syncRealBusinesses(log = false): Promise<SyncResult> {
         scheduleJson: buildSchedule(row.horario),
         ratingAvg: Number.isFinite(ratingNum) && ratingNum > 0 && ratingNum <= 5 ? ratingNum : 0,
         ratingCount: 0,
+        // Rating de Google Maps se guarda aparte: sobrevive a reseñas internas
+        googleRating: Number.isFinite(ratingNum) && ratingNum > 0 && ratingNum <= 5 ? ratingNum : null,
         badges,
       },
     });

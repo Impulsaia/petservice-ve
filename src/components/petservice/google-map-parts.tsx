@@ -36,6 +36,8 @@ import {
 } from "@/lib/petservice/google-maps";
 import { MapPanel, type MapSectorPin, type ProviderListItem } from "@/components/petservice/marketplace-parts";
 import { OsmMapPanel } from "@/components/petservice/osm-map-parts";
+import { fmtDrive } from "@/lib/petservice/routing";
+import { providerRank } from "@/components/petservice/marketplace-parts";
 
 // ───────────────────────── GoogleMapPanel ─────────────────────────
 
@@ -223,11 +225,12 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
 
     for (const p of providers) {
       const cm = categoryMeta(p.serviceCategories[0] ?? "OTROS");
+      const rank = providerRank(p);
       const marker = new mapsLib.Marker({
         map,
         position: { lat: p.lat, lng: p.lng },
-        icon: providerPinIcon(PIN_HEX[cm.key] ?? PIN_HEX.OTROS, cm.emoji),
-        title: `${p.businessName}${p.distanceKm !== null ? ` · ${p.distanceKm.toFixed(1)} km` : ""}`,
+        icon: providerPinIcon(PIN_HEX[cm.key] ?? PIN_HEX.OTROS, cm.emoji, { top: rank.top, double: rank.double }),
+        title: `${p.businessName}${p.driveMin != null ? ` · 🚗 ~${p.driveMin} min` : p.distanceKm !== null ? ` · ${p.distanceKm.toFixed(1)} km` : ""}`,
         zIndex: 10,
       });
       marker.addListener("click", () => {
@@ -236,6 +239,10 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
         const verified = p.status === "VERIFIED" || p.badges.includes("VERIFICADO");
         const real = p.badges.includes("REAL");
         const price = p.minPriceUsd;
+        const driveTxt =
+          p.driveMin != null && p.driveKm != null
+            ? `<div style="font-size:11.5px;color:#0f766e;font-weight:800;margin-top:3px">🚗 ${fmtDrive(p.driveKm, p.driveMin)} en carro</div>`
+            : "";
         iw.setContent(
           `<div style="min-width:212px;font-family:inherit">` +
             `<div style="display:flex;gap:9px;align-items:center">` +
@@ -244,10 +251,11 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
                 `<div style="font-weight:800;font-size:13.5px;color:#18181b;line-height:1.25">${esc(p.businessName)}` +
                 (real ? ` <span style="background:#99f6e4;color:#115e59;font-size:9.5px;font-weight:900;border-radius:9999px;padding:1px 5px;vertical-align:2px">Real</span>` : "") +
                 (verified ? ` <span title="Verificado" style="color:#059669;font-size:12px">✔</span>` : "") +
+                (rank.top ? ` <span title="4+ estrellas en Google Maps" style="background:#fef3c7;color:#92400e;font-size:9.5px;font-weight:900;border-radius:9999px;padding:1px 5px;vertical-align:2px">⭐ ${rank.google.toFixed(1)}</span>` : "") +
                 `</div>` +
                 `<div style="font-size:11px;color:#71717a;margin-top:2px">★ ${p.ratingAvg.toFixed(1)} (${p.ratingCount}) · ${esc(p.zoneName)}` +
-                (p.distanceKm !== null ? ` · ${p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`}` : "") +
                 `</div>` +
+                driveTxt +
               `</div>` +
             `</div>` +
             (price !== null

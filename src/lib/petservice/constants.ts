@@ -63,30 +63,31 @@ export const ZONES: Zone[] = [
   { name: "Villa Colombia", city: "Puerto Ordaz", lat: 8.2752, lng: -62.7657 },
   { name: "Cachamay", city: "Puerto Ordaz", lat: 8.2735, lng: -62.7245 },
   { name: "La Llovizna", city: "Puerto Ordaz", lat: 8.2608, lng: -62.7312 },
-  // Sectores este/sur de Puerto Ordaz (pedidos por usuarios del sector)
-  { name: "Core 8", city: "Puerto Ordaz", lat: 8.268, lng: -62.743 },
-  { name: "Guamo", city: "Puerto Ordaz", lat: 8.2771, lng: -62.7765 },
-  { name: "Villa Bahía", city: "Puerto Ordaz", lat: 8.263, lng: -62.732 },
-  { name: "Río Negro", city: "Puerto Ordaz", lat: 8.2656, lng: -62.746 },
-  { name: "Minifincas", city: "Puerto Ordaz", lat: 8.253, lng: -62.737 },
-  { name: "Toro Muerto", city: "Puerto Ordaz", lat: 8.27, lng: -62.726 },
-  { name: "Santa Rosa", city: "Puerto Ordaz", lat: 8.2588, lng: -62.7836 },
-  // San Félix (municipio Caroní — orilla este del Caroní) y zonas circunvecinas
-  { name: "Gran Sabana", city: "San Félix", lat: 8.2266, lng: -62.8278 },
-  { name: "San Félix Centro", city: "San Félix", lat: 8.2506, lng: -62.8047 },
-  { name: "El Roble", city: "San Félix", lat: 8.2550, lng: -62.7930 },
-  { name: "Los Olivos", city: "San Félix", lat: 8.2646, lng: -62.8176 },
-  { name: "Villa Española", city: "San Félix", lat: 8.2576, lng: -62.8118 },
-  { name: "Las Américas", city: "San Félix", lat: 8.2472, lng: -62.8146 },
-  { name: "11 de Abril", city: "San Félix", lat: 8.2400, lng: -62.8050 },
-  { name: "Dalla Costa", city: "San Félix", lat: 8.2330, lng: -62.8090 },
-  { name: "Los Tanques", city: "San Félix", lat: 8.2600, lng: -62.7990 },
-  { name: "El Niño", city: "San Félix", lat: 8.2530, lng: -62.7860 },
-  { name: "La Cruz", city: "San Félix", lat: 8.2446, lng: -62.7990 },
-  { name: "Guaicara", city: "San Félix", lat: 8.2270, lng: -62.8170 },
-  { name: "Caratal", city: "San Félix", lat: 8.2200, lng: -62.7930 },
-  { name: "Caruachi", city: "San Félix", lat: 8.2330, lng: -62.7150 },
-  { name: "El Palúu", city: "San Félix", lat: 8.2120, lng: -62.8380 },
+  // Sectores suroeste de Puerto Ordaz (coords = suburbios OSM verificados vía Overpass)
+  { name: "Core 8", city: "Puerto Ordaz", lat: 8.22855, lng: -62.82539 }, // Urb. Gran Sabana (Core 8)
+  { name: "Gran Sabana", city: "Puerto Ordaz", lat: 8.2266, lng: -62.8278 },
+  { name: "Guamo", city: "Puerto Ordaz", lat: 8.27478, lng: -62.78208 }, // El Guamo
+  { name: "Villa Bahía", city: "Puerto Ordaz", lat: 8.24032, lng: -62.79117 },
+  { name: "Río Negro", city: "Puerto Ordaz", lat: 8.26626, lng: -62.74637 },
+  { name: "Minifincas", city: "Puerto Ordaz", lat: 8.253, lng: -62.737 }, // sin mapeo OSM: estimación
+  { name: "Toro Muerto", city: "Puerto Ordaz", lat: 8.26806, lng: -62.72681 },
+  { name: "Santa Rosa", city: "Puerto Ordaz", lat: 8.25999, lng: -62.76068 }, // Lomas de Santa Rosa
+  // San Félix (orilla ESTE del Caroní — coords verificados al Este; el puente está junto a la represa Macagua)
+  { name: "San Félix Centro", city: "San Félix", lat: 8.3696, lng: -62.66454 }, // Calle Bolívar, Pquia. Simón Bolívar
+  { name: "Chirica", city: "San Félix", lat: 8.34754, lng: -62.64713 },
+  { name: "El Roble", city: "San Félix", lat: 8.35404, lng: -62.67028 },
+  { name: "Los Olivos", city: "San Félix", lat: 8.34454, lng: -62.66113 },
+  { name: "Villa Española", city: "San Félix", lat: 8.34454, lng: -62.66113 },
+  { name: "Las Américas", city: "San Félix", lat: 8.34154, lng: -62.66463 },
+  { name: "11 de Abril", city: "San Félix", lat: 8.35054, lng: -62.64713 },
+  { name: "Dalla Costa", city: "San Félix", lat: 8.34117, lng: -62.68045 }, // Av. Dalla Costa (Este)
+  { name: "Los Tanques", city: "San Félix", lat: 8.34754, lng: -62.66813 },
+  { name: "El Niño", city: "San Félix", lat: 8.35054, lng: -62.65063 },
+  { name: "La Cruz", city: "San Félix", lat: 8.34754, lng: -62.66813 },
+  { name: "Guaicara", city: "San Félix", lat: 8.35354, lng: -62.64713 },
+  { name: "Caratal", city: "San Félix", lat: 8.28821, lng: -62.58243 }, // Pquia. Yocoima
+  { name: "Caruachi", city: "San Félix", lat: 8.35054, lng: -62.64713 },
+  { name: "El Palúu", city: "San Félix", lat: 8.34754, lng: -62.66463 },
   // Ciudad Bolívar (municipio Heres)
   { name: "Centro Histórico", city: "Ciudad Bolívar", lat: 8.1236, lng: -63.5486 },
   { name: "Vista Hermosa", city: "Ciudad Bolívar", lat: 8.1322, lng: -63.5397 },

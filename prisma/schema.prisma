@@ -55,6 +55,10 @@ model Provider {
   scheduleJson String @default("{}")
   ratingAvg    Float  @default(0)
   ratingCount  Int    @default(0)
+  // Calificación de la ficha pública en Google Maps (importada; 0 reseñas propias)
+  // Se conserva aparte para que las reseñas internas no la borren.
+  googleRating Float?
+  googleReviews Int?
   // badges separados por coma: VERIFICADO, TOP, EXPRESS, GATOS
   badges       String @default("")
 

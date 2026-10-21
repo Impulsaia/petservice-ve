@@ -1,0 +1,28 @@
+{
+  "sectors": {
+    "Guamo": {
+      "q": "El Guamo, Puerto Ordaz",
+      "lat": 8.2771069,
+      "lng": -62.7765481,
+      "label": "SAIME, C.C. Guayana Mall, Redoma La Piña, Complejo Residencial Las Islas, Parroquia Unare, Municipio Caroní, E"
+    },
+    "Río Negro": {
+      "q": "Río Negro, Puerto Ordaz",
+      "lat": 8.2653393,
+      "lng": -62.7459675,
+      "label": "King Kebab, Food Park Puerto Ordaz, Avenida Guarapiche, Parroquia Unare, Municipio Caroní, Estado Bolívar, 805"
+    }
+  },
+  "providers": [
+    {
+      "id": "cmvhzx3j8006no1h57csnzrhh",
+      "name": "Agropeluquería N.R. (Inversiones Agropeluquería N.R., C.A.)",
+      "oldLat": 8.22851,
+      "oldLng": -62.801366,
+      "source": "nominatim",
+      "lat": 8.3413632,
+      "lng": -62.6363211,
+      "label": "Hierros San Félix, C.A., Avenida Antonio Cisneros, Parroquia Chirica, Municipio Caroní, Estado Bolívar, 8051, "
+    }
+  ]
+}

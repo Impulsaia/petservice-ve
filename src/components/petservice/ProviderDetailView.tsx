@@ -10,6 +10,7 @@ import { apiGet } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
 import { categoryMeta, PET_SIZES, PET_SPECIES } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs, fmtDateShort, fmtRelative, waLink } from "@/lib/petservice/format";
+import { fmtDrive } from "@/lib/petservice/routing";
 import { Avatar, CategoryIcon, EmptyState, RatingStars } from "@/components/petservice/shared";
 
 interface Detail {
@@ -17,6 +18,7 @@ interface Detail {
     id: string; businessName: string; ownerName: string; phone?: string | null; bio: string; status: string;
     city: string; zoneName: string; lat: number; lng: number; radiusKm: number;
     scheduleJson: string; ratingAvg: number; ratingCount: number; badges: string;
+    googleRating?: number | null; googleReviews?: number | null;
   };
   services: {
     id: string; category: string; name: string; description: string; durationMin: number;
@@ -24,21 +26,23 @@ interface Detail {
   }[];
   reviews: { id: string; authorName: string; rating: number; comment: string; tags: string; response: string | null; createdAt: string }[];
   tagCounts: Record<string, number>;
+  drive?: { km: number | null; min: number | null; straightKm: number | null } | null;
 }
 
 const WEEK_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 export function ProviderDetailView() {
-  const { selectedProviderId, backToHome, settings, openBooking } = useAppStore();
+  const { selectedProviderId, backToHome, settings, openBooking, loc } = useAppStore();
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!selectedProviderId) return;
-    apiGet<Detail>(`/api/providers/${selectedProviderId}`)
+    const qs = new URLSearchParams({ lat: String(loc.lat), lng: String(loc.lng) });
+    apiGet<Detail>(`/api/providers/${selectedProviderId}?${qs}`)
       .then(setData)
       .catch(() => setError(true));
-  }, [selectedProviderId]);
+  }, [selectedProviderId, loc.lat, loc.lng]);
 
   if (error) {
     return <EmptyState emoji="🙀" title="No encontramos este prestador" desc="Quizás ya no está disponible." action={<Button onClick={backToHome} variant="outline" className="rounded-xl font-bold">Volver a explorar</Button>} />;
@@ -120,9 +124,22 @@ export function ProviderDetailView() {
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
             <RatingStars value={provider.ratingAvg} count={provider.ratingCount} />
+            {(provider.googleRating ?? (provider.ratingCount === 0 ? provider.ratingAvg : 0)) >= 4 && (
+              <span
+                title={`Ficha pública de Google Maps: ${(provider.googleRating ?? provider.ratingAvg).toFixed(1)}★`}
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-800 dark:bg-amber-950/70 dark:text-amber-300"
+              >
+                <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" /> {(provider.googleRating ?? provider.ratingAvg).toFixed(1)} en Google
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 text-muted-foreground">
               <MapPin className="h-4 w-4" /> {provider.zoneName} · cobertura {provider.radiusKm} km
             </span>
+            {data.drive?.km != null && data.drive?.min != null && (
+              <span className="inline-flex items-center gap-1 font-semibold text-primary" title={`Distancia real de conducción (OSRM). En línea recta: ${data.drive.straightKm ?? "—"} km`}>
+                🚗 {fmtDrive(data.drive.km, data.drive.min)} en carro
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 text-muted-foreground">
               <CategoryIcon category={services[0]?.category ?? ""} className="h-4 w-4" /> {services.length} servicios
             </span>

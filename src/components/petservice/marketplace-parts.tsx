@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { categoryMeta, CITIES, ZONES } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
 import { projectToMap, getCityBounds, haversineKm, fmtDistance, CITY_BOUNDS, type LatLng } from "@/lib/petservice/geo";
+import { fmtDrive } from "@/lib/petservice/routing";
 import { CategoryIcon, RatingStars, Avatar } from "@/components/petservice/shared";
 import { useAppStore } from "@/lib/petservice/store";
 import { toast } from "sonner";
@@ -22,31 +23,61 @@ export interface ProviderListItem {
   lng: number;
   ratingAvg: number;
   ratingCount: number;
+  /** Ficha pública de Google Maps (null si no se importó) */
+  googleRating?: number | null;
+  googleReviews?: number | null;
   badges: string;
   status?: string;
   distanceKm: number | null;
+  /** Conducción REAL vía OSRM (null si el router no respondió) */
+  driveKm?: number | null;
+  driveMin?: number | null;
   minPriceUsd: number | null;
   serviceCategories: string[];
   services: { id: string; category: string; name: string; priceUsd: number }[];
+}
+
+/** Ranking de un prestador según sus calificaciones:
+ *  top = 4+★ en Google Maps · double = además 4+★ en reseñas PetService-VE */
+export function providerRank(p: Pick<ProviderListItem, "googleRating" | "ratingAvg" | "ratingCount">): {
+  google: number;
+  top: boolean;
+  psTop: boolean;
+  double: boolean;
+} {
+  const google = p.googleRating ?? (p.ratingCount === 0 ? p.ratingAvg : 0);
+  const top = google >= 4;
+  const psTop = p.ratingCount > 0 && p.ratingAvg >= 4;
+  return { google, top, psTop, double: top && psTop };
 }
 
 export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: ProviderListItem; rate: number }) {
   const openProvider = useAppStore((s) => s.openProvider);
   const meta = categoryMeta(p.serviceCategories[0] ?? "OTROS");
   const isTop = p.badges.includes("TOP");
+  const rank = providerRank(p);
 
   return (
     <article
       onClick={() => openProvider(p.id)}
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-warm transition-all duration-200 hover:-translate-y-1 hover:border-primary/40"
+      className={cn(
+        "group relative cursor-pointer overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-warm transition-all duration-200 hover:-translate-y-1 hover:border-primary/40",
+        rank.top && !rank.double && "border-amber-300/90 bg-gradient-to-b from-amber-50/80 to-card shadow-[0_2px_16px_rgba(245,158,11,0.18)] dark:from-amber-950/25",
+        rank.double && "border-amber-400 bg-gradient-to-b from-amber-50/90 to-card shadow-[0_2px_20px_rgba(245,158,11,0.30)] ring-2 ring-amber-400/60 dark:from-amber-950/30"
+      )}
     >
-      {isTop && (
+      {rank.double && (
+        <span className="absolute -right-9 top-3 rotate-45 bg-gradient-to-r from-amber-400 to-amber-500 px-9 py-0.5 text-[10px] font-black uppercase tracking-wide text-white shadow-sm">
+          ★ Top
+        </span>
+      )}
+      {!rank.double && isTop && (
         <span className="absolute -right-9 top-3 rotate-45 bg-accent px-9 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent-foreground shadow-sm">
           Top
         </span>
       )}
       <div className="flex items-start gap-3">
-        <Avatar name={p.businessName} emoji={meta.emoji} className="h-14 w-14 text-xl" />
+        <Avatar name={p.businessName} emoji={meta.emoji} className={cn("h-14 w-14 text-xl", rank.top && "ring-2 ring-amber-400 ring-offset-2 ring-offset-card")} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h3 className="truncate font-display text-base font-extrabold">{p.businessName}</h3>
@@ -66,16 +97,50 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
             )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            <RatingStars value={p.ratingAvg} count={p.ratingCount} size="xs" />
+            {rank.psTop ? (
+              <RatingStars value={p.ratingAvg} count={p.ratingCount} size="xs" />
+            ) : rank.google > 0 ? (
+              <RatingStars value={rank.google} count={0} size="xs" />
+            ) : (
+              <RatingStars value={p.ratingAvg} count={p.ratingCount} size="xs" />
+            )}
             <span aria-hidden>·</span>
             <span className="truncate">{p.zoneName}</span>
-            {p.distanceKm !== null && (
+            {p.driveMin != null && p.driveKm != null ? (
               <>
                 <span aria-hidden>·</span>
-                <span className="font-semibold text-primary">{fmtDistance(p.distanceKm)}</span>
+                <span className="whitespace-nowrap font-semibold text-primary" title={`Distancia real de conducción (rutas con puente incluido). En línea recta: ${fmtDistance(p.distanceKm ?? 0)}.`}>
+                  🚗 {fmtDrive(p.driveKm, p.driveMin)}
+                </span>
               </>
-            )}
+            ) : p.distanceKm !== null ? (
+              <>
+                <span aria-hidden>·</span>
+                <span className="font-semibold text-primary" title="Distancia en línea recta (el router de rutas no respondió)">
+                  {fmtDistance(p.distanceKm)} <span className="text-[10px] font-normal text-muted-foreground">recta</span>
+                </span>
+              </>
+            ) : null}
           </div>
+          {(rank.top || rank.psTop) && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {rank.top && (
+                <span title={`Calificación ${rank.google.toFixed(1)}★ en su ficha pública de Google Maps`} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
+                  ⭐ {rank.google.toFixed(1)} Google
+                </span>
+              )}
+              {rank.psTop && (
+                <span title={`Reseñas de clientes en PetService-VE: ${p.ratingAvg.toFixed(1)}★ (${p.ratingCount})`} className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
+                  🏆 {p.ratingAvg.toFixed(1)} PetService ({p.ratingCount})
+                </span>
+              )}
+              {rank.double && (
+                <span title="4+★ en Google Maps Y en PetService-VE" className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
+                  👑 Doble Top
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

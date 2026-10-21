@@ -574,7 +574,9 @@ export function MarketplaceView() {
             </label>
 
             <div className="ml-auto flex items-center gap-2">
-              <span className="hidden text-xs font-bold text-muted-foreground sm:inline">Radio: {filters.radiusKm} km</span>
+              <span className="hidden text-xs font-bold text-muted-foreground sm:inline" title="El radio filtra en línea recta; cada tarjeta muestra el tiempo REAL de conducción (con puentes y calles)">
+                Radio: {filters.radiusKm} km <span className="font-normal text-muted-foreground/80">(recta)</span>
+              </span>
               <Slider
                 value={[filters.radiusKm]}
                 onValueChange={([v]) => setFilters({ radiusKm: v })}

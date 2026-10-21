@@ -25,7 +25,9 @@ import { PawPrint, Star, Navigation, LocateFixed, TriangleAlert, RotateCcw, Map 
 import { cn } from "@/lib/utils";
 import { categoryMeta, CITIES, ZONES } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
-import { getCityBounds, haversineKm, CITY_BOUNDS, type LatLng } from "@/lib/petservice/geo";
+import { getCityBounds, haversineKm, fmtDistance, CITY_BOUNDS, type LatLng } from "@/lib/petservice/geo";
+import { fmtDrive } from "@/lib/petservice/routing";
+import { providerRank } from "@/components/petservice/marketplace-parts";
 import { useAppStore } from "@/lib/petservice/store";
 import { toast } from "sonner";
 import {
@@ -229,19 +231,36 @@ export function OsmMapPanel({ providers, rate, sector, vacant, onFallback }: Osm
 
     for (const p of providers) {
       const cm = categoryMeta(p.serviceCategories[0] ?? "OTROS");
+      const rank = providerRank(p);
+      // Halo pulsante dorado para el doble resaltado (4+★ Google Y 4+★ PetService)
+      if (rank.double) {
+        const halo = L.marker([p.lat, p.lng], {
+          icon: L.divIcon({ className: "ps-pin-halo-gold", iconSize: [58, 58] }),
+          interactive: false,
+          zIndexOffset: 400,
+        });
+        halo.addTo(map);
+        providerMarkersRef.current.push(halo);
+      }
       const marker = L.marker([p.lat, p.lng], {
         icon: L.icon({
-          iconUrl: providerPinIcon(PIN_HEX[cm.key] ?? PIN_HEX.OTROS, cm.emoji) as string,
+          iconUrl: providerPinIcon(PIN_HEX[cm.key] ?? PIN_HEX.OTROS, cm.emoji, { top: rank.top, double: rank.double }) as string,
           iconSize: [34, 46],
           iconAnchor: [17, 44],
           popupAnchor: [0, -44],
         }),
-        title: `${p.businessName}${p.distanceKm !== null ? ` · ${p.distanceKm.toFixed(1)} km` : ""}`,
+        title: `${p.businessName}${p.driveMin != null ? ` · 🚗 ~${p.driveMin} min` : p.distanceKm !== null ? ` · ${p.distanceKm.toFixed(1)} km` : ""}`,
         zIndexOffset: 500,
       });
       const verified = p.status === "VERIFIED" || p.badges.includes("VERIFICADO");
       const real = p.badges.includes("REAL");
       const price = p.minPriceUsd;
+      const driveTxt =
+        p.driveMin != null && p.driveKm != null
+          ? `🚗 ${fmtDrive(p.driveKm, p.driveMin)} en carro`
+          : p.distanceKm !== null
+            ? `📍 ${fmtDistance(p.distanceKm)} en línea recta`
+            : "";
       marker.bindPopup(
         `<div style="min-width:212px;font-family:inherit">` +
           `<div style="display:flex;gap:9px;align-items:center">` +
@@ -250,10 +269,11 @@ export function OsmMapPanel({ providers, rate, sector, vacant, onFallback }: Osm
               `<div style="font-weight:800;font-size:13.5px;color:#18181b;line-height:1.25">${esc(p.businessName)}` +
               (real ? ` <span style="background:#99f6e4;color:#115e59;font-size:9.5px;font-weight:900;border-radius:9999px;padding:1px 5px;vertical-align:2px">Real</span>` : "") +
               (verified ? ` <span title="Verificado" style="color:#059669;font-size:12px">✔</span>` : "") +
+              (rank.top ? ` <span title="4+ estrellas en Google Maps" style="background:#fef3c7;color:#92400e;font-size:9.5px;font-weight:900;border-radius:9999px;padding:1px 5px;vertical-align:2px">⭐ ${rank.google.toFixed(1)}</span>` : "") +
               `</div>` +
               `<div style="font-size:11px;color:#71717a;margin-top:2px">★ ${p.ratingAvg.toFixed(1)} (${p.ratingCount}) · ${esc(p.zoneName)}` +
-              (p.distanceKm !== null ? ` · ${p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`}` : "") +
               `</div>` +
+              (driveTxt ? `<div style="font-size:11.5px;color:#0f766e;font-weight:800;margin-top:3px">${driveTxt}</div>` : "") +
             `</div>` +
           `</div>` +
           (price !== null
@@ -520,8 +540,11 @@ export function OsmMapPanel({ providers, rate, sector, vacant, onFallback }: Osm
             <span className="flex items-center gap-1">
               <PawPrint className="h-3 w-3 text-primary" /> {providers.length}
             </span>
-            <span className="hidden items-center gap-1 sm:flex">
-              <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> 4.5+
+            <span
+              className="hidden items-center gap-1 sm:flex"
+              title="Pines dorados: 4+★ en Google Maps · con halo pulsante: además 4+★ en PetService-VE"
+            >
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> 4+★ Google
             </span>
           </span>
         </div>

@@ -150,14 +150,28 @@ export const PIN_HEX: Record<string, string> = {
   OTROS: "#0f766e",
 };
 
-/** Pin "gota" con emoji, coloreado por categoría (ancla en la punta) */
-export function providerPinIcon(hex: string, emoji: string): google.maps.Symbol | string {
+/** Pin "gota" con emoji, coloreado por categoría (ancla en la punta).
+ *  rank.top → relleno DORADO (4+★ en Google Maps);
+ *  rank.double → además estrella blanca (también 4+★ en PetService-VE). */
+export function providerPinIcon(
+  hex: string,
+  emoji: string,
+  rank?: { top?: boolean; double?: boolean }
+): google.maps.Symbol | string {
+  const GOLD = "#f59e0b";
+  const fill = rank?.top ? GOLD : hex;
+  const badge =
+    rank?.double
+      ? `<circle cx="26.5" cy="27" r="7" fill="#ffffff" stroke="${GOLD}" stroke-width="2"/>` +
+        `<text x="26.5" y="30.5" font-size="9.5" text-anchor="middle" fill="${GOLD}">★</text>`
+      : "";
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">` +
     `<path d="M17 1C8.2 1 1 8.2 1 17c0 9.4 9.2 18.6 14.1 26.1a2.2 2.2 0 0 0 3.8 0C23.8 35.6 33 26.4 33 17 33 8.2 25.8 1 17 1Z" ` +
-    `fill="${hex}" stroke="#ffffff" stroke-width="2.5"/>` +
+    `fill="${fill}" stroke="#ffffff" stroke-width="2.5"/>` +
     `<circle cx="17" cy="16.5" r="10.5" fill="rgba(255,255,255,0.22)"/>` +
     `<text x="17" y="21.5" font-size="13" text-anchor="middle">${emoji}</text>` +
+    `${badge}` +
     `</svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

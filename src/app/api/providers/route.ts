@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { haversineKm } from "@/lib/petservice/geo";
+import { driveTable } from "@/lib/petservice/routing";
 
 /**
  * GET /api/providers
  * Búsqueda pública de prestadores VERIFICADOS con:
- * - lat/lng/radius → filtro por radio y orden por cercanía (Haversine, sin PostGIS)
+ * - lat/lng/radius → filtro por radio (línea recta, coincide con el círculo del mapa)
+ * - driveKm/driveMin → distancia y tiempo REALES de conducción vía OSRM
+ *   (el río Caroní convierte "1.7 km recta" en ~25 min de carro: se reporta la verdad)
  * - zone → zona administrativa (municipio/parroquia/ciudad)
- * - category, q, minRating, petType, sort
+ * - category, q, minRating (cuenta Google Maps o reseñas internas), petType, sort
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -65,9 +68,13 @@ export async function GET(req: Request) {
         radiusKm: p.radiusKm,
         ratingAvg: p.ratingAvg,
         ratingCount: p.ratingCount,
+        googleRating: p.googleRating,
+        googleReviews: p.googleReviews,
         badges: p.badges,
         status: p.status,
         distanceKm,
+        driveKm: null as number | null,
+        driveMin: null as number | null,
         serviceCount: p.services.length,
         serviceCategories: [...new Set(p.services.map((s) => s.category))],
         minPriceUsd,
@@ -86,11 +93,28 @@ export async function GET(req: Request) {
     .filter((p) => {
       if (!p.textMatch) return false;
       if ((category || petType) && p.services.length === 0) return false;
-      if (minRating && p.ratingAvg < minRating) return false;
+      // minRating: vale la ficha de Google Maps O las reseñas internas
+      if (minRating && Math.max(p.googleRating ?? 0, p.ratingAvg) < minRating) return false;
       if (zone && !`${p.zoneName} ${p.city}`.toLowerCase().includes(zone.toLowerCase())) return false;
       if (hasCoords && p.distanceKm !== null && p.distanceKm > radius) return false;
       return true;
     });
+
+  // Distancias/tiempos de conducción reales (OSRM): solo para los resultados
+  // visibles (≤90 → 1 llamada table); si falla, quedan null y la UI muestra
+  // la distancia recta rotulada.
+  if (hasCoords && results.length > 0) {
+    const drive = await driveTable(
+      { lat, lng },
+      results.slice(0, 90).map((r) => ({ lat: r.lat, lng: r.lng }))
+    );
+    results.forEach((r, i) => {
+      if (i < 90) {
+        r.driveKm = drive.km[i];
+        r.driveMin = drive.min[i];
+      }
+    });
+  }
 
   results.sort((a, b) => {
     switch (sort) {
@@ -101,9 +125,10 @@ export async function GET(req: Request) {
       case "price_desc":
         return (b.minPriceUsd ?? -1) - (a.minPriceUsd ?? -1);
       default: {
-        const da = a.distanceKm ?? 1e9;
-        const dbb = b.distanceKm ?? 1e9;
-        return da - dbb;
+        // "Más cerca" = menos tiempo de conducción (los usuarios cruzan puentes, no líneas rectas)
+        const ka = a.driveMin ?? (a.distanceKm != null ? a.distanceKm * 2.2 : 1e9);
+        const kb = b.driveMin ?? (b.distanceKm != null ? b.distanceKm * 2.2 : 1e9);
+        return ka - kb;
       }
     }
   });
@@ -111,6 +136,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     total: results.length,
     providers: results,
-    search: { hasCoords, lat, lng, radius, category, q, zone },
+    search: { hasCoords, lat, lng, radius, category, q, zone, drive: results.some((r) => r.driveMin != null) },
   });
 }

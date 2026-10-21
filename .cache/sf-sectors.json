@@ -1,0 +1,32 @@
+{
+  "San Félix Centro": {
+    "lat": 8.3696034,
+    "lng": -62.6645368,
+    "label": "Banco de Venezuela, Calle 2 Bolívar, Parroquia Simón Bolívar, Municipio Caroní, Estado Bolívar, 8051, Venezuela",
+    "query": "San Félix centro, Venezuela"
+  },
+  "Caratal": {
+    "lat": 8.288205,
+    "lng": -62.5824286,
+    "label": "Caratal, Parroquia Yocoima, Municipio Caroní, Estado Bolívar, Venezuela",
+    "query": "Caratal, Municipio Caroní"
+  },
+  "El Roble": {
+    "lat": 8.3540445,
+    "lng": -62.6702774,
+    "label": "Feria de las Hortalizas de El Roble, Carrera Anzoátegui, Parroquia Simón Bolívar, Municipio Caroní, Estado Bolívar, 8051",
+    "query": "El Roble, San Félix"
+  },
+  "Chirica": {
+    "lat": 8.3475408,
+    "lng": -62.6471342,
+    "label": "San Félix, Parroquia Chirica, Municipio Caroní, Estado Bolívar, 8051, Venezuela",
+    "query": "Chirica, San Félix"
+  },
+  "Dalla Costa": {
+    "lat": 8.3411748,
+    "lng": -62.6804474,
+    "label": "CORPOELEC, Centro Empresarial Karma, PB, Local 1, Avenida Dalla Costa, Parroquia Dalla Costa, Municipio Caroní, Estado B",
+    "query": "Parroquia Dalla Costa, San Félix"
+  }
+}
