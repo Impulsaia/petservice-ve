@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import {
   verifyPassword, createSessionToken, sessionCookie, rateLimit, clientIp,
   sameOriginOrError, readJson, isValidEmail, jsonError, cleanText,
@@ -11,6 +11,7 @@ import {
  * - Mensajes genéricos para no filtrar existencia de cuentas (anti enumeración)
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

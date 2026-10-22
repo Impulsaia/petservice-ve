@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 /**
  * GET /api/sectors?city=Puerto%20Ordaz — sectores activos de una ciudad. Público.
@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
  * Respuesta: { city, sectors: [{ id, cityName, name, zone, lat, lng }] }
  */
 export async function GET(req: Request) {
+  await ensureDbReady();
   const { searchParams } = new URL(req.url);
   const city = (searchParams.get("city") ?? "").trim().slice(0, 60);
   if (!city) {

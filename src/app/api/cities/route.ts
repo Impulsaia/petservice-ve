@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 /**
  * GET /api/cities — ciudades activas de toda Venezuela + número de prestadores
@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
  * Ordenadas: primero por nº de prestadores (desc), luego alfabético.
  */
 export async function GET() {
+  await ensureDbReady();
   const [cities, grouped] = await Promise.all([
     db.city.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     db.provider.groupBy({ by: ["city"], _count: { city: true } }),

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError } from "@/lib/petservice/auth";
 import { syncRateIfNeeded, rateView, fetchBcvRate } from "@/lib/petservice/rate";
 
@@ -17,6 +17,7 @@ export async function GET() {
  * (dolarapi → pydolarve → bcv.org.ve). SOLO ADMIN.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

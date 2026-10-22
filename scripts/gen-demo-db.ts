@@ -19,6 +19,9 @@ const OUT = join(process.cwd(), "src", "lib", "petservice", "demoDb.ts");
 try {
   const buf = readFileSync(SRC);
   const b64 = buf.toString("base64");
+  // Hash estable del contenido: versión de datos para la fusión de catálogo
+  // en producción (catalogMerge.ts). Cambia SOLO si la demo embebida cambió.
+  const hashBuf = new Bun.CryptoHasher("md5").update(b64).digest("hex");
   const content = `/**
  * AUTO-GENERADO por scripts/gen-demo-db.ts — NO editar a mano.
  *
@@ -29,6 +32,9 @@ try {
  * Regenerar tras cambiar el seed:  bun prisma/seed.ts && bun scripts/gen-demo-db.ts
  */
 export const DEMO_DB_BASE64 = "${b64}";
+
+/** MD5 del contenido — versión de datos para la fusión de catálogo en producción */
+export const DEMO_DB_HASH = "${hashBuf}";
 `;
   writeFileSync(OUT, content);
   console.log(

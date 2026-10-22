@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 import { getProviderOf } from "@/lib/petservice/server";
 
@@ -50,6 +50,7 @@ export async function GET(req: Request) {
  *         contactId?, clientName?, phone?, petName?, address?, notes? }
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

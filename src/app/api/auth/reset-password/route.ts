@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createHash } from "crypto";
-import { db } from "@/lib/db";
+import { db, flushDb } from "@/lib/db";
 import {
   rateLimit, clientIp, sameOriginOrError, readJson, jsonError,
   passwordProblems, hashPassword, createSessionToken, sessionCookie,
@@ -16,6 +16,7 @@ import {
  * Rate limit: 10/h por IP (los tokens ya son de un solo uso y expiran en 30 min).
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

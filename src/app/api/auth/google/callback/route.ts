@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { createSessionToken, sessionCookie } from "@/lib/petservice/auth";
 
 /**
@@ -24,6 +24,7 @@ function fail(req: Request, code: string, log?: string) {
 }
 
 export async function GET(req: Request) {
+  await ensureDbReady();
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return fail(req, "google_no_configurado", "Faltan credenciales en el callback");

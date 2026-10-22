@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { getSettings, createBookingWithCode, notify, money, upsertCrmFromBooking } from "@/lib/petservice/server";
 import { requireUser, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 
@@ -56,6 +56,7 @@ export async function GET(req: Request) {
  * compatibilidad especie/tamaño, coberturas y longitud de campos.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireRole, sameOriginOrError, readJson, cleanText, rateLimit, clientIp } from "@/lib/petservice/auth";
-import { db } from "@/lib/db";
+import { db, flushDb } from "@/lib/db";
 import { runDataQuery } from "@/lib/petservice/dataquery";
 
 /**
@@ -9,6 +9,7 @@ import { runDataQuery } from "@/lib/petservice/dataquery";
  * datos de otros prestadores aunque la pregunta sea global.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

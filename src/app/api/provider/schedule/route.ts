@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireUser, sameOriginOrError, readJson, jsonError } from "@/lib/petservice/auth";
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -11,6 +11,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
  * Un schedule vacío ({}) activa horarios tentativos 8:00–17:00 en el asistente.
  */
 export async function PATCH(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

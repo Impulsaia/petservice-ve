@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireUser, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 
 const SPECIES = ["PERRO", "GATO", "AVE", "ROEDOR", "OTRO"];
@@ -11,6 +11,7 @@ const GENDERS = ["MACHO", "HEMBRA", "N/D"];
  * Campos: name, species, size, breed, notes, birthDate, weightKg, gender.
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 
@@ -91,6 +92,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
  * Si tiene reservas asociadas se rechaza el borrado (integridad histórica).
  */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

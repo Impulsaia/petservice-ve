@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { REVIEW_TAGS } from "@/lib/petservice/constants";
 import { requireUser, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 
@@ -9,6 +9,7 @@ import { requireUser, sameOriginOrError, readJson, cleanText } from "@/lib/petse
  * Recalcula el promedio del prestador.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 
@@ -89,6 +90,7 @@ export async function POST(req: Request) {
  * Body: { id, action: "respond"|"hide"|"show", response? }
  */
 export async function PATCH(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

@@ -1,3 +1,4 @@
+import { ensureDbReady } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 
@@ -19,6 +20,7 @@ import { randomBytes } from "crypto";
 export const OAUTH_STATE_COOKIE = "psve_oauth_state";
 
 export async function GET(req: Request) {
+  await ensureDbReady();
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 

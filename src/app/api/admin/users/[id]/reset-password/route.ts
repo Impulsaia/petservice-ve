@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { randomBytes } from "crypto";
-import { db } from "@/lib/db";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, jsonError, hashPassword } from "@/lib/petservice/auth";
 
 /**
@@ -12,6 +12,7 @@ import { requireRole, sameOriginOrError, jsonError, hashPassword } from "@/lib/p
  * la política (letra + número, ≥8). Se guarda con scrypt igual que el registro.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

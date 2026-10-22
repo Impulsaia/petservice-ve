@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError } from "@/lib/petservice/auth";
 import { parseServiceBody } from "@/lib/petservice/validators";
 
@@ -8,6 +8,7 @@ import { parseServiceBody } from "@/lib/petservice/validators";
  * precio, nombre, descripción, active, etc. Útil para moderación de precios.
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 
@@ -33,6 +34,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
  * Si tiene reservas asociadas se rechaza (integridad) y se sugiere desactivar.
  */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

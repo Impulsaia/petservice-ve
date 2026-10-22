@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
-import { db } from "@/lib/db";
+import { db, flushDb } from "@/lib/db";
 import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 import { ZONES } from "@/lib/petservice/constants";
 import { matchFirulais } from "@/lib/petservice/firulais";
@@ -18,6 +18,7 @@ import { matchFirulais } from "@/lib/petservice/firulais";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

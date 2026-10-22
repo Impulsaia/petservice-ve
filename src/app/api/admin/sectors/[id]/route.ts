@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 
 const ZONES = ["CENTRO", "NORTE", "SUR", "ESTE", "OESTE"];
@@ -8,6 +8,7 @@ const ZONES = ["CENTRO", "NORTE", "SUR", "ESTE", "OESTE"];
  * PATCH /api/admin/sectors/[id] — edita un sector (nombre, zona, coords, active).
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 
@@ -59,6 +60,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 /** DELETE /api/admin/sectors/[id] — elimina un sector (los eventos no lo referencian) */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

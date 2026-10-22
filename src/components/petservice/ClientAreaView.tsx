@@ -11,10 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Star, Plus, PawPrint, Bell, Wallet, MessageSquareQuote, CalendarDays, ChevronRight, MessageCircle, Search, CalendarClock, Layers } from "lucide-react";
+import { Star, Plus, PawPrint, Bell, Wallet, MessageSquareQuote, CalendarDays, ChevronRight, MessageCircle, Search, CalendarClock, Layers, Hourglass } from "lucide-react";
 import { apiGet, apiPost, apiPatch } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
-import { REVIEW_TAGS, PET_SIZES, BOOKING_STATUS } from "@/lib/petservice/constants";
+import { REVIEW_TAGS, PET_SIZES, BOOKING_STATUS, PAYMENT_METHODS } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs, fmtDateTime, fmtRelative, waLink } from "@/lib/petservice/format";
 import { Avatar, BookingStatusBadge, PaymentStatusBadge, EmptyState, CategoryIcon } from "@/components/petservice/shared";
 import { PetCard, PetFormDialog, StatCard, SPECIES_META, type PetFull } from "@/components/petservice/client-parts";
@@ -38,6 +38,7 @@ export function ClientAreaView() {
   const [pets, setPets] = useState<PetFull[]>([]);
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const [reviewFor, setReviewFor] = useState<BookingItem | null>(null);
+  const [payFor, setPayFor] = useState<BookingItem | null>(null);
 
   // ── Mascotas: filtros + dialog ──
   const [petQuery, setPetQuery] = useState("");
@@ -153,7 +154,9 @@ export function ClientAreaView() {
     [bkQuery, bkStatus]
   );
 
-  const active = (bookings ?? []).filter((b) => ["PENDIENTE_PAGO", "CONFIRMADA", "EN_CURSO"].includes(b.status) && matchBooking(b));
+  // Pre-agenda: reserva apartada que aún no tiene pago registrado del cliente
+  const preAgenda = (bookings ?? []).filter((b) => b.status === "PENDIENTE_PAGO" && !b.payment && matchBooking(b));
+  const active = (bookings ?? []).filter((b) => (["CONFIRMADA", "EN_CURSO"].includes(b.status) || (b.status === "PENDIENTE_PAGO" && !!b.payment)) && matchBooking(b));
   const history = (bookings ?? []).filter((b) => ["COMPLETADA", "CANCELADA"].includes(b.status) && matchBooking(b));
 
   return (
@@ -225,12 +228,24 @@ export function ClientAreaView() {
           </div>
 
           <section>
-            <h2 className="mb-3 font-display text-lg font-extrabold">Próximas y activas ({active.length})</h2>
+            <h2 className="mb-3 font-display text-lg font-extrabold">⏳ Pre-agenda — falta tu pago ({preAgenda.length})</h2>
+            {preAgenda.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-border/70 bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+                Aquí verás las reservas que apartes antes de registrar el pago. Al registrar tu pago pasan a “Confirmadas y en curso”.
+              </p>
+            ) : (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {preAgenda.map((b) => <BookingCard key={b.id} b={b} rate={rate} onCancel={cancelBooking} onPay={(bb) => setPayFor(bb)} onReview={(bb) => setReviewFor(bb)} onOpenProvider={openProvider} />)}
+              </div>
+            )}
+          </section>
+          <section>
+            <h2 className="mb-3 font-display text-lg font-extrabold">Confirmadas y en curso ({active.length})</h2>
             {active.length === 0 ? (
               <EmptyState emoji="🗓️" title={bkQuery || bkStatus !== "ALL" ? "Nada con esos filtros" : "No tienes reservas activas"} desc={bkQuery || bkStatus !== "ALL" ? "Prueba con otro estado o limpia la búsqueda." : "Explora prestadores cerca de ti y agenda en minutos."} />
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
-                {active.map((b) => <BookingCard key={b.id} b={b} rate={rate} onCancel={cancelBooking} onReview={(bb) => setReviewFor(bb)} onOpenProvider={openProvider} />)}
+                {active.map((b) => <BookingCard key={b.id} b={b} rate={rate} onCancel={cancelBooking} onPay={(bb) => setPayFor(bb)} onReview={(bb) => setReviewFor(bb)} onOpenProvider={openProvider} />)}
               </div>
             )}
           </section>
@@ -240,7 +255,7 @@ export function ClientAreaView() {
               <EmptyState emoji="📦" title={bkQuery || bkStatus !== "ALL" ? "Nada con esos filtros" : "Sin historial todavía"} />
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
-                {history.map((b) => <BookingCard key={b.id} b={b} rate={rate} onCancel={cancelBooking} onReview={(bb) => setReviewFor(bb)} onOpenProvider={openProvider} />)}
+                {history.map((b) => <BookingCard key={b.id} b={b} rate={rate} onCancel={cancelBooking} onPay={(bb) => setPayFor(bb)} onReview={(bb) => setReviewFor(bb)} onOpenProvider={openProvider} />)}
               </div>
             )}
           </section>
@@ -379,15 +394,17 @@ export function ClientAreaView() {
 
       {/* Dialog de reseña */}
       <ReviewDialog booking={reviewFor} onClose={() => setReviewFor(null)} onDone={() => { setReviewFor(null); load(); }} />
+      <PaymentDialog booking={payFor} rate={rate} onClose={() => setPayFor(null)} onDone={() => { setPayFor(null); load(); }} />
     </div>
   );
 }
 
 // ───────────────────────── Card de reserva ─────────────────────────
 
-function BookingCard({ b, rate, onCancel, onReview, onOpenProvider }: {
+function BookingCard({ b, rate, onCancel, onPay, onReview, onOpenProvider }: {
   b: BookingItem; rate: number;
   onCancel: (b: BookingItem) => void;
+  onPay: (b: BookingItem) => void;
   onReview: (b: BookingItem) => void;
   onOpenProvider: (id: string) => void;
 }) {
@@ -395,6 +412,8 @@ function BookingCard({ b, rate, onCancel, onReview, onOpenProvider }: {
   const extras = JSON.parse(b.extrasJson || "[]") as { name: string; usd: number }[];
   const canCancel = ["PENDIENTE_PAGO", "CONFIRMADA"].includes(b.status);
   const canReview = b.status === "COMPLETADA" && !b.review;
+  // Pre-agenda: apartada sin pago registrado todavía
+  const isPreAgenda = b.status === "PENDIENTE_PAGO" && !b.payment;
   // WhatsApp real prestador→cliente: chat directo con el número del negocio
   const wa = waLink(
     b.provider.user?.phone,
@@ -402,7 +421,13 @@ function BookingCard({ b, rate, onCancel, onReview, onOpenProvider }: {
   );
 
   return (
-    <article className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-all hover:shadow-warm">
+    <article className={cn("rounded-2xl border bg-card p-4 shadow-sm transition-all hover:shadow-warm", isPreAgenda && "border-violet-300 ring-2 ring-violet-200 dark:border-violet-800 dark:ring-violet-900/60")}>
+      {isPreAgenda && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+          <Hourglass className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span><strong>Pre-agenda:</strong> apartamos tu espacio. Registra tu pago para que quede confirmada y el prestador la reciba en su agenda.</span>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <button onClick={() => onOpenProvider(b.provider.id)} className="group flex items-center gap-2.5 text-left">
           <Avatar name={b.provider.businessName} className="h-10 w-10 text-xs" />
@@ -412,7 +437,13 @@ function BookingCard({ b, rate, onCancel, onReview, onOpenProvider }: {
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </button>
-        <BookingStatusBadge status={b.status} />
+        {isPreAgenda ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-extrabold text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">
+            <Hourglass className="h-3 w-3" aria-hidden /> Pre-agenda
+          </span>
+        ) : (
+          <BookingStatusBadge status={b.status} />
+        )}
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -450,6 +481,11 @@ function BookingCard({ b, rate, onCancel, onReview, onOpenProvider }: {
           )}
         </div>
         <div className="flex gap-1.5">
+          {(b.status === "PENDIENTE_PAGO" && (!b.payment || b.payment.status === "RECHAZADO")) && (
+            <Button size="sm" onClick={() => onPay(b)} className="h-8 rounded-lg bg-primary px-3 text-xs font-bold hover:bg-primary/90" aria-label={`Registrar pago de la reserva ${b.code}`}>
+              <Wallet className="h-3.5 w-3.5" /> Registrar pago
+            </Button>
+          )}
           {wa && (
             <a
               href={wa}
@@ -580,6 +616,99 @@ function ReviewDialog({ booking, onClose, onDone }: { booking: BookingItem | nul
           <Button onClick={submit} disabled={submitting || comment.trim().length < 5} className="w-full rounded-xl bg-primary font-bold">
             <MessageSquareQuote className="h-4 w-4" /> {submitting ? "Enviando…" : "Publicar reseña"}
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ───────────────────────── Dialog de registro de pago (pre-agenda → por verificar) ─────────────────────────
+
+function PaymentDialog({ booking, rate, onClose, onDone }: { booking: BookingItem | null; rate: number; onClose: () => void; onDone: () => void }) {
+  const [method, setMethod] = useState("PAGO_MOVIL");
+  const [reference, setReference] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (booking) { setMethod("PAGO_MOVIL"); setReference(""); }
+  }, [booking]);
+
+  if (!booking) return null;
+  const meta = PAYMENT_METHODS.find((m) => m.key === method)!;
+  const rejected = booking.payment?.status === "RECHAZADO";
+
+  async function submit() {
+    if (!booking) return;
+    if (meta.needsReference && reference.trim().length < 4) {
+      toast.error("Ingresa la referencia o comprobante del pago");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await apiPost("/api/payments", { bookingId: booking.id, method, reference: reference.trim() || undefined });
+      toast.success(`Pago registrado para ${booking.code}. Quedó “por verificar” hasta que el administrador lo concilie. 🧾`);
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo registrar el pago");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85svh] overflow-y-auto rounded-3xl sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">💳 Registrar pago — {booking.code}</DialogTitle>
+          <DialogDescription>
+            {booking.service.name} · {booking.pet.name} · {fmtUsd(booking.priceUsd)} ≈ {fmtBs(booking.priceBs)} (tasa {fmtBs(rate)}/$)
+          </DialogDescription>
+        </DialogHeader>
+        {rejected && (
+          <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+            Tu pago anterior fue rechazado. Verifica la referencia e intenta de nuevo.
+          </p>
+        )}
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-method">Método de pago</Label>
+            <Select value={method} onValueChange={setMethod}>
+              <SelectTrigger id="pay-method" aria-label="Método de pago" className="h-11 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m.key} value={m.key}>{m.emoji} {m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] leading-snug text-muted-foreground">{meta.desc}</p>
+          </div>
+          {meta.needsReference && (
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-ref">{meta.refLabel}</Label>
+              <Input
+                id="pay-ref"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder={meta.placeholder}
+                className="h-11 rounded-xl font-mono"
+                inputMode="text"
+                autoComplete="off"
+              />
+            </div>
+          )}
+          {method === "EFECTIVO" && (
+            <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+              El pago en efectivo confirma la reserva de inmediato; se abona al prestador al finalizar el servicio.
+            </p>
+          )}
+          <Button onClick={submit} disabled={submitting} className="h-11 w-full rounded-xl bg-primary font-bold">
+            <Wallet className="h-4 w-4" /> {submitting ? "Registrando…" : "Registrar pago"}
+          </Button>
+          <p className="text-center text-[11px] text-muted-foreground">
+            Tras registrar el pago, tu reserva queda “por verificar” hasta que el equipo concilie la referencia.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

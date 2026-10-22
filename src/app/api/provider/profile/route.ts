@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import {
   requireUser,
   sameOriginOrError,
@@ -18,6 +18,7 @@ const SOCIAL_URL_RE = /^https:\/\/(www\.)?\S{1,300}$/;
  * No permite cambiar ciudad/zona/coordenadas (eso lo valida el admin).
  */
 export async function PATCH(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

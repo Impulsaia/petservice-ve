@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError } from "@/lib/petservice/auth";
 import { getProviderOf } from "@/lib/petservice/server";
 import { parseServiceBody } from "@/lib/petservice/validators";
@@ -9,6 +9,7 @@ import { parseServiceBody } from "@/lib/petservice/validators";
  * Acepta cualquier subconjunto de campos del servicio.
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 
@@ -41,6 +42,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
  * desactivarlo con PATCH { active: false }.
  */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

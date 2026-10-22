@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { haversineKm } from "@/lib/petservice/geo";
 import { driveTable } from "@/lib/petservice/routing";
 
@@ -13,6 +13,7 @@ import { driveTable } from "@/lib/petservice/routing";
  * - category, q, minRating (cuenta Google Maps o reseñas internas), petType, sort
  */
 export async function GET(req: Request) {
+  await ensureDbReady();
   const { searchParams } = new URL(req.url);
   const num = (v: string | null, min: number, max: number, dflt: number) => {
     // Nota: un param ausente (null/vacío) debe caer al default — Number(null)=0

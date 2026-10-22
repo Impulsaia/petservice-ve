@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError } from "@/lib/petservice/auth";
 import { getProviderOf } from "@/lib/petservice/server";
 import { parseServiceBody } from "@/lib/petservice/validators";
@@ -27,6 +27,7 @@ export async function GET(req: Request) {
  * Body: { name, category, description, durationMin, priceUsd, priceToUsd?, modality, petTypes, petSizes, extras?, active? }
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

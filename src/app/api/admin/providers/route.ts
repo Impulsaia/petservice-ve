@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole } from "@/lib/petservice/auth";
 
 /** GET /api/admin/providers — todos los prestadores con estado de verificación (SOLO ADMIN) */
@@ -31,6 +31,7 @@ export async function GET(req: Request) {
 
 /** PATCH /api/admin/providers — verificación en capas (auditable, SOLO ADMIN) */
 export async function PATCH(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const auth = await requireRole(req, "ADMIN");
   if (auth instanceof NextResponse) return auth;
 

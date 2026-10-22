@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { notify } from "@/lib/petservice/server";
 import { requireRole, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 
@@ -9,6 +9,7 @@ import { requireRole, sameOriginOrError, readJson, cleanText } from "@/lib/petse
  * verify → pago VERIFICADO + reserva CONFIRMADA (libera el flujo de escrow lógico)
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

@@ -1,12 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { seedAll } from "@/lib/petservice/seed";
 import { requireRole, sameOriginOrError } from "@/lib/petservice/auth";
+import { flushDb } from "@/lib/db";
 
 /**
  * POST /api/demo/reseed — reinicia los datos demo (SOLO ADMIN)
  * Es una operación destructiva: se protege con rol de administrador.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

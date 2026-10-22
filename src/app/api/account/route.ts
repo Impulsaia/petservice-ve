@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import {
   requireUser,
   sameOriginOrError,
@@ -48,6 +48,7 @@ export async function GET(req: Request) {
  *  - avatarUrl admite data URL (≤ ~300 KB, redimensionada en el cliente) o https URL.
  */
 export async function PATCH(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

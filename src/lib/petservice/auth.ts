@@ -14,7 +14,7 @@ import { promisify } from "util";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import path from "path";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 const scrypt = promisify(_scrypt) as (p: string, s: Buffer, k: number) => Promise<Buffer>;
 
@@ -148,6 +148,9 @@ export interface SessionUser {
 
 /** Lee la cookie de sesión y devuelve el usuario (o null). Consulta fresca en DB para rol actual. */
 export async function getSessionUser(req: Request): Promise<SessionUser | null> {
+  // En Vercel asegura que esta instancia tenga el snapshot más reciente del
+  // blob compartido antes de leer usuarios/sesiones (ver src/lib/db.ts).
+  await ensureDbReady();
   const cookies = req.headers.get("cookie") ?? "";
   const match = cookies.split(";").map((c) => c.trim()).find((c) => c.startsWith(`${SESSION_COOKIE}=`));
   if (!match) return null;

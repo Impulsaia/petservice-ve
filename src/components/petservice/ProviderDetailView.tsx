@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, MapPin, ShieldCheck, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote, MessageCircle, Navigation, Instagram, Facebook, Globe, Music2 } from "lucide-react";
+import { ArrowLeft, MapPin, ShieldCheck, Sparkles, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote, MessageCircle, Navigation, Instagram, Facebook, Globe, Music2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +12,7 @@ import { categoryMeta, PET_SIZES, PET_SPECIES } from "@/lib/petservice/constants
 import { fmtUsd, fmtBs, fmtDateShort, fmtRelative, waLink } from "@/lib/petservice/format";
 import { fmtDrive } from "@/lib/petservice/routing";
 import { Avatar, CategoryIcon, EmptyState, RatingStars } from "@/components/petservice/shared";
+import { BookingFlowDialog, type BookingFlowData } from "@/components/petservice/BookingFlowDialog";
 
 interface Detail {
   provider: {
@@ -20,6 +21,7 @@ interface Detail {
     scheduleJson: string; ratingAvg: number; ratingCount: number; badges: string;
     googleRating?: number | null; googleReviews?: number | null;
     avatarUrl?: string | null; isNew?: boolean;
+    bookingFlow?: BookingFlowData | null;
     socials?: { instagram?: string | null; facebook?: string | null; tiktok?: string | null; website?: string | null };
   };
   services: {
@@ -39,9 +41,10 @@ function gmapsDirectionsUrl(lat: number, lng: number, name: string): string {
 const WEEK_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 export function ProviderDetailView() {
-  const { selectedProviderId, backToHome, settings, openBooking, loc } = useAppStore();
+  const { selectedProviderId, backToHome, settings, openBooking, bumpData, loc } = useAppStore();
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedProviderId) return;
@@ -225,31 +228,46 @@ export function ProviderDetailView() {
                     </div>
                   )}
 
-                  {s.priceUsd > 0 ? (
-                    <Button
-                      onClick={() => openBooking({ providerId: provider.id, serviceId: s.id })}
-                      className="mt-3 w-full rounded-xl bg-primary font-bold hover:bg-primary/90"
-                    >
-                      <CalendarPlus className="h-4 w-4" /> Reservar ahora
-                    </Button>
-                  ) : provider.phone ? (
-                    <Button
-                      asChild
-                      className="mt-3 w-full rounded-xl bg-[#25D366] font-bold text-white hover:bg-[#25D366]/90"
-                    >
-                      <a
-                        href={waLink(provider.phone, `Hola ${provider.businessName}, vi su negocio en PetService VE y me interesa: ${s.name}. ¿Me pueden dar precios y disponibilidad? 🐾`) ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                  {/* Botón Agendar (wizard) + Agenda personalizada (si el prestador define un flow) */}
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    {s.priceUsd > 0 && (
+                      <Button
+                        onClick={() => openBooking({ providerId: provider.id, serviceId: s.id })}
+                        className="min-h-[44px] flex-1 rounded-xl bg-primary font-bold hover:bg-primary/90"
                       >
-                        <MessageCircle className="h-4 w-4" /> Consultar por WhatsApp
-                      </a>
-                    </Button>
-                  ) : (
-                    <Button disabled variant="outline" className="mt-3 w-full rounded-xl font-bold">
-                      Teléfono no publicado
-                    </Button>
-                  )}
+                        <CalendarPlus className="h-4 w-4" /> Reservar ahora
+                      </Button>
+                    )}
+                    {provider.phone && s.priceUsd <= 0 && (
+                      <Button
+                        asChild
+                        className="min-h-[44px] flex-1 rounded-xl bg-[#25D366] font-bold text-white hover:bg-[#25D366]/90"
+                      >
+                        <a
+                          href={waLink(provider.phone, `Hola ${provider.businessName}, vi su negocio en PetService VE y me interesa: ${s.name}. ¿Me pueden dar precios y disponibilidad? 🐾`) ?? "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <MessageCircle className="h-4 w-4" /> Consultar por WhatsApp
+                        </a>
+                      </Button>
+                    )}
+                    {!provider.phone && s.priceUsd <= 0 && (
+                      <Button disabled variant="outline" className="min-h-[44px] flex-1 rounded-xl font-bold">
+                        Teléfono no publicado
+                      </Button>
+                    )}
+                    {provider.bookingFlow && (
+                      <Button
+                        onClick={() => setFlowOpen(true)}
+                        variant="outline"
+                        aria-label="Abrir la agenda personalizada del prestador"
+                        className="min-h-[44px] flex-1 rounded-xl border-violet-300 bg-violet-50 font-bold text-violet-700 hover:bg-violet-100 hover:text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300 dark:hover:bg-violet-900/50"
+                      >
+                        <Sparkles className="h-4 w-4" /> {provider.bookingFlow.buttonLabel || "✨ Agenda personalizada"}
+                      </Button>
+                    )}
+                  </div>
                 </article>
               );
             })}
@@ -397,6 +415,23 @@ export function ProviderDetailView() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Agenda personalizada (flujo tipo chat del prestador) */}
+      {provider.bookingFlow && (
+        <BookingFlowDialog
+          open={flowOpen}
+          onOpenChange={setFlowOpen}
+          provider={{
+            id: provider.id,
+            businessName: provider.businessName,
+            phone: provider.phone ?? null,
+            services,
+            bookingFlow: provider.bookingFlow,
+          }}
+          rate={rate}
+          onBooked={bumpData}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { haversineKm } from "@/lib/petservice/geo";
 import { driveTable } from "@/lib/petservice/routing";
 
@@ -10,6 +10,7 @@ import { driveTable } from "@/lib/petservice/routing";
  * Con ?lat=&lng= añade la distancia/tiempo REALES de conducción (OSRM).
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  await ensureDbReady();
   const { id } = await params;
   const p = await db.provider.findUnique({
     where: { id },
@@ -43,6 +44,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
+  // Flujo de "Agenda personalizada" (JSON opcional del prestador).
+  // Si el JSON está corrupto se devuelve null para no romper el detalle.
+  let bookingFlow: unknown = null;
+  if (p.bookingFlowJson) {
+    try {
+      bookingFlow = JSON.parse(p.bookingFlowJson);
+    } catch {
+      bookingFlow = null;
+    }
+  }
+
   return NextResponse.json({
     provider: {
       id: p.id,
@@ -64,6 +76,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       badges: p.badges,
       avatarUrl: p.avatarUrl,
       isNew: p.newUntil ? p.newUntil.getTime() > Date.now() : false,
+      bookingFlow,
       socials: {
         instagram: p.instagram,
         facebook: p.facebook,

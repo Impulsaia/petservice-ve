@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireRole, sameOriginOrError, readJson, cleanText, rateLimit, clientIp } from "@/lib/petservice/auth";
 import { runDataQuery } from "@/lib/petservice/dataquery";
+import { flushDb } from "@/lib/db";
 
 /**
  * POST /api/admin/query — Consultas de negocio en lenguaje natural (solo ADMIN)
@@ -8,6 +9,7 @@ import { runDataQuery } from "@/lib/petservice/dataquery";
  * Sin SQL crudo: traducción whitelist → agregación en JS.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

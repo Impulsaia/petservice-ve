@@ -74,6 +74,11 @@ model Provider {
   // Registro manual: etiqueta "Nuevo prestador" visible hasta esta fecha (1 mes)
   newUntil     DateTime?
 
+  // Flujo de agenda personalizada (menú tipo chatbot según el tipo de negocio).
+  // Estructura: { title, subtitle, intro?, menu: FlowMenu } — ver BookingFlowDialog.
+  // null = el prestador usa solo el wizard estándar.
+  bookingFlowJson String?
+
   services Service[]
   bookings Booking[]
   reviews  Review[]

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { notify, getSettings } from "@/lib/petservice/server";
 import { requireUser, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 
@@ -11,6 +11,7 @@ import { requireUser, sameOriginOrError, readJson, cleanText } from "@/lib/petse
  * Anti-IDOR: solo el cliente dueño de la reserva puede registrar el pago.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

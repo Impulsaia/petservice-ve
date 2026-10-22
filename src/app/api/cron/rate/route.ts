@@ -1,3 +1,4 @@
+import { ensureDbReady } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { syncRateIfNeeded, rateView } from "@/lib/petservice/rate";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
  * Si CRON_SECRET está definido exige `Authorization: Bearer <secret>`.
  */
 export async function GET(req: Request) {
+  await ensureDbReady();
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const auth = req.headers.get("authorization");

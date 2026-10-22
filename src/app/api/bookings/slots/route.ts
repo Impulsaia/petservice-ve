@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { notify } from "@/lib/petservice/server";
 
 /**
@@ -7,6 +7,7 @@ import { notify } from "@/lib/petservice/server";
  * Slots disponibles según horario del prestador y reservas existentes.
  */
 export async function GET(req: Request) {
+  await ensureDbReady();
   const { searchParams } = new URL(req.url);
   const providerId = searchParams.get("providerId");
   const date = searchParams.get("date");

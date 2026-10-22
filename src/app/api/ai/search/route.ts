@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
 import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 import { ZONES } from "@/lib/petservice/constants";
+import { flushDb } from "@/lib/db";
 
 /**
  * POST /api/ai/search — Búsqueda semántica
@@ -115,6 +116,7 @@ function parseLocal(query: string) {
 }
 
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

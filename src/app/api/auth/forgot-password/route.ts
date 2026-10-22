@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createHash, randomBytes } from "crypto";
-import { db } from "@/lib/db";
+import { db, flushDb } from "@/lib/db";
 import { rateLimit, clientIp, sameOriginOrError, readJson, isValidEmail, jsonError, cleanText } from "@/lib/petservice/auth";
 import { sendRecoveryEmail } from "@/lib/petservice/mailer";
 
@@ -18,6 +18,7 @@ import { sendRecoveryEmail } from "@/lib/petservice/mailer";
  * Rate limit: 3 peticiones/hora por IP.
  */
 export async function POST(req: Request) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 

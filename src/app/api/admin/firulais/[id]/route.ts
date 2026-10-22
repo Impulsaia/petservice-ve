@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse, after } from "next/server";
+import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 import { normalizeKeywords } from "@/lib/petservice/firulais";
 
@@ -7,6 +7,7 @@ import { normalizeKeywords } from "@/lib/petservice/firulais";
  * PATCH /api/admin/firulais/[id] — edita una entrada (question/answer/keywords/active).
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 
@@ -42,6 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 /** DELETE /api/admin/firulais/[id] — elimina una entrada y sus referencias en logs */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
   const csrf = sameOriginOrError(req);
   if (csrf) return csrf;
 
