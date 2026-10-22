@@ -34,6 +34,10 @@ export async function GET(req: Request) {
   const sort = searchParams.get("sort") ?? "distance";
   const hasCoords = isFinite(lat) && isFinite(lng);
 
+  /** comparación sin acentos: "peluqueria" debe encontrar "peluquería" (en VE se teclea sin tildes) */
+  const deacc = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const qNorm = deacc(q);
+
   const providers = await db.provider.findMany({
     where: onlyVerified ? { status: "VERIFIED" } : {},
     include: { services: { where: { active: true } } },
@@ -47,12 +51,12 @@ export async function GET(req: Request) {
       if (category) filtered = filtered.filter((s) => s.category === category);
       if (petType) filtered = filtered.filter((s) => s.petTypes.split(",").includes(petType));
 
-      // Match textual: nombre, bio, zona o (si no hay filtros de categoría) servicios
+      // Match textual (sin acentos): nombre, bio, zona o (si no hay filtros de categoría) servicios
       let textMatch = true;
       if (q) {
-        const hay = `${p.businessName} ${p.bio} ${p.zoneName} ${p.city}`.toLowerCase();
-        const hayServices = p.services.map((s) => s.name).join(" ").toLowerCase();
-        textMatch = hay.includes(q) || (!category && !petType && hayServices.includes(q));
+        const hay = deacc(`${p.businessName} ${p.bio} ${p.zoneName} ${p.city}`.toLowerCase());
+        const hayServices = deacc(p.services.map((s) => s.name).join(" ").toLowerCase());
+        textMatch = hay.includes(qNorm) || (!category && !petType && hayServices.includes(qNorm));
       }
 
       const visible = category || petType ? filtered : filtered.length ? filtered : p.services;
