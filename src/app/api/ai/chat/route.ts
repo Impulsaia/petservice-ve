@@ -1,9 +1,9 @@
 import { NextResponse, after } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
 import { db, flushDb } from "@/lib/db";
 import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 import { ZONES, SUPPORT_WHATSAPP } from "@/lib/petservice/constants";
 import { matchFirulais } from "@/lib/petservice/firulais";
+import { createZai } from "@/lib/petservice/zai";
 
 /**
  * POST /api/ai/chat — Asistente del cliente (IA transversal con guardrails)
@@ -103,7 +103,7 @@ MÉTODOS DE PAGO: Pago Móvil (Banco de Venezuela, con número de referencia), T
     let lastErr: unknown = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const zai = await ZAI.create();
+        const zai = await createZai();
         const completion = await zai.chat.completions.create({
           messages: [
             { role: "system", content: systemPrompt },

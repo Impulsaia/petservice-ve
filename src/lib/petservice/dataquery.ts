@@ -12,6 +12,7 @@
  *   riesgo de alucinación de cifras).
  */
 import { db } from "@/lib/db";
+import { createZai } from "@/lib/petservice/zai";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
 
 export type Scope = "admin" | "provider";
@@ -466,8 +467,7 @@ export async function runDataQuery(question: string, scope: Scope, providerId?: 
 
 async function specWithLlm(question: string): Promise<QuerySpec | null> {
   try {
-    const { default: ZAI } = await import("z-ai-web-dev-sdk");
-    const zai = await ZAI.create();
+        const zai = await createZai();
     const completion = await zai.chat.completions.create({
       messages: [
         {

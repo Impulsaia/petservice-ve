@@ -1,8 +1,8 @@
 import { NextResponse, after } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
 import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
 import { ZONES } from "@/lib/petservice/constants";
 import { flushDb } from "@/lib/db";
+import { createZai } from "@/lib/petservice/zai";
 
 /**
  * POST /api/ai/search — Búsqueda semántica
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
 
   // 2) Fallback LLM para lenguaje complejo
   try {
-    const zai = await ZAI.create();
+    const zai = await createZai();
     const completion = await zai.chat.completions.create({
       messages: [
         {
