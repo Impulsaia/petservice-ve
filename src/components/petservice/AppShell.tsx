@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { PawPrint, Moon, Sun, Compass, CalendarDays, Store, ShieldCheck, RefreshCcw, LogIn, LogOut } from "lucide-react";
+import { PawPrint, Moon, Sun, Compass, CalendarDays, Store, ShieldCheck, RefreshCcw, LogIn, LogOut, Mail, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useAppStore, type View } from "@/lib/petservice/store";
 import { apiGet, apiPost } from "@/lib/petservice/api";
-import { SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_WA, type CategoryKey } from "@/lib/petservice/constants";
+import { SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_WA, SUPPORT_EMAIL, CREDIT_BRAND, type CategoryKey } from "@/lib/petservice/constants";
 
 const NAV: { key: View; label: string; short: string; icon: React.ReactNode; role: string }[] = [
   { key: "home", label: "Explorar", short: "Explorar", icon: <Compass className="h-5 w-5" />, role: "CLIENT" },
@@ -103,7 +103,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   /** Footer: lanzar búsqueda por categoría desde un enlace de servicio */
   function searchByCategory(category: CategoryKey) {
-    setFilters({ category, q: "", zone: null });
+    // Búsqueda nueva desde el footer: también limpia mascota/estrellas para no arrastrar filtros previos
+    setFilters({ category, q: "", zone: null, petType: null, minRating: 0 });
     backToHome();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -280,6 +281,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </a>
               <br />
               Lunes a sábado, 8:00 a.m. – 6:00 p.m.
+            </p>
+            <p className="mt-2 text-muted-foreground">
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="inline-flex items-center gap-1.5 font-bold underline decoration-dotted underline-offset-2 hover:text-foreground">
+                <Mail className="h-4 w-4" aria-hidden />
+                {SUPPORT_EMAIL}
+              </a>
+            </p>
+            <p className="mt-3 flex items-center gap-1.5 text-xs font-bold tracking-wide text-muted-foreground" title="Diseño y desarrollo">
+              <Sparkles className="h-3.5 w-3.5 text-violet-500 dark:text-violet-400" aria-hidden />
+              {CREDIT_BRAND}
             </p>
             <p className="mt-3 text-xs text-muted-foreground/70">
               Pagos: Pago Móvil · Transferencia · Zelle · Binance · Efectivo

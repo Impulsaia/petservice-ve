@@ -98,7 +98,7 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
     // 4) Prestadores: MANUAL → solo insertar; importados → refresco geográfico
     const seedProviders = await seed.provider.findMany()
     for (const p of seedProviders) {
-      const exists = await db0.provider.findUnique({ where: { id: p.id }, select: { id: true } })
+      const exists = await db0.provider.findUnique({ where: { id: p.id }, select: { id: true, bookingFlowJson: true } })
       if (!exists) {
         await db0.provider.create({
           data: {
@@ -108,18 +108,21 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
             googleRating: p.googleRating, googleReviews: p.googleReviews, badges: p.badges,
             avatarUrl: p.avatarUrl, instagram: p.instagram, facebook: p.facebook, tiktok: p.tiktok,
             website: p.website, source: p.source, newUntil: p.newUntil,
+            bookingFlowJson: p.bookingFlowJson, suspensionNote: p.suspensionNote,
           },
         })
         continue
       }
       if (p.source !== 'MANUAL') {
         // Refresco de catálogo: nunca status/badges/avatar/redes/newUntil (producción manda)
+        // bookingFlowJson: contenido sembrado — se copia solo si en producción aún no existe
         await db0.provider.update({
           where: { id: p.id },
           data: {
             businessName: p.businessName, bio: p.bio, city: p.city, zoneName: p.zoneName,
             lat: p.lat, lng: p.lng, radiusKm: p.radiusKm,
             googleRating: p.googleRating, googleReviews: p.googleReviews, source: p.source,
+            ...(p.bookingFlowJson && !exists.bookingFlowJson ? { bookingFlowJson: p.bookingFlowJson } : {}),
           },
         })
       }

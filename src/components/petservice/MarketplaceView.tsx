@@ -126,8 +126,9 @@ export function MarketplaceView() {
   function chooseCity(c: CityInfo) {
     setCitiesOpen(false);
     setCityQuery("");
-    // Nueva búsqueda desde el botón: se limpia el filtro textual anterior
-    setFilters({ zone: null, q: "" });
+    // Nueva búsqueda desde el botón: se limpian TODOS los filtros anteriores
+    // (texto, zona, categoría, mascota, estrellas) — el usuario empieza de cero.
+    setFilters({ zone: null, q: "", category: null, petType: null, minRating: 0 });
     if (c.providerCount > 0) {
       setSelectedSector(null);
       setCity(c.name, centerForCity(c.name, c));
@@ -142,14 +143,14 @@ export function MarketplaceView() {
   function selectSector(s: SectorInfo) {
     setSelectedSector(s);
     setLoc({ label: s.name, lat: s.lat, lng: s.lng });
-    // Nueva búsqueda desde el botón: se limpia el filtro textual anterior
-    setFilters({ q: "" });
+    // Nueva búsqueda desde el botón: se limpian texto, categoría, mascota y estrellas
+    setFilters({ q: "", category: null, petType: null, minRating: 0 });
     toast.success(`🏘️ Buscando en ${s.name}${s.zone ? ` · Pq. ${s.zone}` : ""}`);
   }
 
   function clearSector() {
     setSelectedSector(null);
-    setFilters({ q: "" });
+    setFilters({ q: "", category: null, petType: null, minRating: 0 });
     const center = centerForCity(city, currentCityInfo);
     if (center) setCity(city, center);
   }
@@ -164,7 +165,7 @@ export function MarketplaceView() {
     // Preferimos Puerto Ordaz (sede principal); si no, la primera activa
     const target = active?.find((c) => c.name === "Puerto Ordaz")?.name ?? active?.[0]?.name ?? "Puerto Ordaz";
     setSelectedSector(null);
-    setFilters({ zone: null, q: "" });
+    setFilters({ zone: null, q: "", category: null, petType: null, minRating: 0 });
     setCity(target, centerForCity(target, active?.find((c) => c.name === target) ?? undefined));
   }
 
@@ -520,7 +521,7 @@ export function MarketplaceView() {
       <section aria-label="Categorías de servicios">
         <div className="scroll-slim -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1">
           <button
-            onClick={() => setFilters({ category: null, q: "" })}
+            onClick={() => setFilters({ category: null, q: "", petType: null, minRating: 0 })}
             className={cn(
               "flex shrink-0 flex-col items-center gap-1 rounded-2xl border px-4 py-3 transition-all",
               !filters.category
@@ -534,7 +535,7 @@ export function MarketplaceView() {
           {CATEGORIES.map((c) => (
             <button
               key={c.key}
-              onClick={() => setFilters({ category: filters.category === c.key ? null : (c.key as CategoryKey), q: "" })}
+              onClick={() => setFilters({ category: filters.category === c.key ? null : (c.key as CategoryKey), q: "", petType: null, minRating: 0 })}
               className={cn(
                 "flex shrink-0 flex-col items-center gap-1 rounded-2xl border px-4 py-3 transition-all",
                 filters.category === c.key

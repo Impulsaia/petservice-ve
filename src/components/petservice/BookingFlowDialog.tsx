@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  ExternalLink,
   Loader2,
   Lock,
   MapPin,
@@ -50,6 +51,8 @@ interface FlowAction {
   serviceName?: string;
   selectService?: boolean;
   message?: string;
+  /** URL externa (action type="link"): Instagram, sitio web, etc. */
+  url?: string;
 }
 interface FlowNode {
   title?: string;
@@ -409,6 +412,17 @@ export function BookingFlowDialog({
                           >
                             <CalendarPlus className="h-4 w-4" /> {a.label}
                           </Button>
+                        ) : a.type === "link" && a.url ? (
+                          <a
+                            key={`a-${i}`}
+                            href={a.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={a.label}
+                            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-violet-300 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-700 shadow-sm transition-colors hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300 dark:hover:bg-violet-900/50"
+                          >
+                            <ExternalLink className="h-4 w-4" /> {a.label}
+                          </a>
                         ) : (
                           <WhatsAppAction
                             key={`a-${i}`}

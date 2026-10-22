@@ -42,6 +42,10 @@ export const CATEGORIES: CategoryMeta[] = [
 export const SUPPORT_WHATSAPP = "+58 424 9526402";
 /** Digits-only para enlaces wa.me: 584249526402 */
 export const SUPPORT_WHATSAPP_WA = "584249526402";
+/** Email oficial de soporte (único punto de verdad) */
+export const SUPPORT_EMAIL = "impulsaia@gmail.com";
+/** Marca de diseño/desarrollo mostrada en el footer */
+export const CREDIT_BRAND = "Zcreativo";
 
 export function categoryMeta(key: string): CategoryMeta {
   return CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[0];
