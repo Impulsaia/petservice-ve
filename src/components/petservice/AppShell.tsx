@@ -78,21 +78,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   /** Estado (entidad federal) de la ciudad activa — para el breadcrumb del header */
   const [cityState, setCityState] = useState<string | null>(null);
-  const [totalCities, setTotalCities] = useState<number>(29);
 
-  // Breadcrumb dinámico: "Estado · Ciudad · + N ciudades" según donde navega el usuario
+  // Breadcrumb dinámico: "Venezuela · Estado · Ciudad · + 29 ciudades" según donde navega el usuario
   useEffect(() => {
     let alive = true;
     const apply = (list: { name: string; state: string }[]) => {
       if (!alive) return;
       setCityState(list.find((c) => c.name === city)?.state ?? null);
-      setTotalCities(list.length || 29);
     };
     if (citiesCache) {
       apply(citiesCache);
       return;
     }
-    apiGet<{ cities: { name: string; state: string }[]; total: number }>("/api/cities")
+    apiGet<{ cities: { name: string; state: string }[] }>("/api/cities")
       .then((d) => {
         citiesCache = d.cities;
         apply(d.cities);
@@ -148,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 PetService <span className="text-accent-foreground rounded-md bg-accent px-1 py-0.5 text-xs font-black">VE</span>
               </span>
               <span className="text-[11px] text-muted-foreground">
-                Venezuela 🇻🇪{cityState ? ` · ${cityState} · ${city}` : ""} · + {totalCities} ciudades 🐾
+                Venezuela 🇻🇪{cityState ? ` · ${cityState} · ${city}` : ""} · + 29 ciudades 🐾
               </span>
             </span>
           </button>
