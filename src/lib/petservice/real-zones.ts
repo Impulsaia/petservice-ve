@@ -82,7 +82,7 @@ export async function syncZoneBusinesses(log = false): Promise<ZoneSyncResult> {
       row.facebook ? `Facebook: ${row.facebook}` : null,
     ].filter(Boolean).join(" · ");
     const bio = [
-      `Negocio real de mascotas identificado en ${row.city}. ${row.address}.`,
+      `Peluquería y servicios para mascotas en ${row.city}. ${row.address}.`,
       row.phones.length ? "Contacto por WhatsApp o llamada." : "Contacto por redes sociales.",
       socialBits ? `${socialBits}.` : null,
       `Fuente: ${row.source}.`,

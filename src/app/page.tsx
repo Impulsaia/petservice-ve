@@ -36,6 +36,13 @@ export default function Home() {
     }
   }, [view, user, authLoaded, setView]);
 
+  // Al cambiar de vista o de prestador, la ventana SIEMPRE arranca arriba:
+  // el SPA conserva el scroll previo y en móvil abría el perfil a media página.
+  const viewKey = `${view}:${selectedProviderId ?? ""}`;
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+  }, [viewKey]);
+
   // key: remonta el detalle al cambiar de prestador (evita setState en effect)
   const content = !authLoaded ? (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-muted-foreground">

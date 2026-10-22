@@ -38,15 +38,18 @@ import {
   apiDelete, BookingDetailDialog, CalEventItem, ContactDialog, ContactItem, ContactStatusBadge,
   CrmStats, EVENT_STATUS_META, EVENT_TYPE_META, EventFormDialog, MonthGrid,
   ProviderBookingItem, ServiceCard, ServiceFormDialog, ServiceItem, Spin, StatCard, TagBadges, WaButton,
+  WeeklyScheduleEditor,
   parseTags,
 } from "@/components/petservice/provider-parts";
 import {
   BulkContactPanel, QrDialog, TagFilterBar, TemplatesDialog,
   exportContactsCsv, exportContactsVcf,
 } from "@/components/petservice/provider-crm-parts";
+import { AccountProfileEditor, BusinessProfileEditor } from "@/components/petservice/account-settings";
 
 interface ProviderInfo {
   id: string; businessName: string; status: string; ratingAvg: number; ratingCount: number; zoneName: string; city: string;
+  avatarUrl?: string | null;
 }
 interface ReviewItem {
   id: string; authorName: string; rating: number; comment: string; tags: string; response: string | null; createdAt: string;
@@ -476,7 +479,7 @@ export function ProviderDashboard() {
       {/* Encabezado (branding heredado) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Avatar name={provider?.businessName ?? "Pet Spa VIP"} emoji="✂️" className="h-12 w-12 text-xl" />
+          <Avatar name={provider?.businessName ?? "Pet Spa VIP"} emoji="✂️" src={provider?.avatarUrl ?? undefined} className="h-12 w-12 text-xl" />
           <div>
             <h1 className="font-display text-2xl font-black">{provider?.businessName ?? "…"}</h1>
             <p className="text-sm text-muted-foreground">Panel de prestador · {provider?.zoneName}, {provider?.city}</p>
@@ -793,6 +796,7 @@ export function ProviderDashboard() {
 
         {/* ── Calendario ── */}
         <TabsContent value="calendario" className="mt-4 space-y-4">
+          <WeeklyScheduleEditor />
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-0.5 rounded-xl border border-border/70 bg-card p-1 shadow-sm">
               <Button variant="ghost" size="icon" onClick={() => shiftMonth(-1)} aria-label="Mes anterior" className="h-8 w-8 rounded-lg"><ChevronLeft className="h-4 w-4" /></Button>
@@ -1051,30 +1055,36 @@ export function ProviderDashboard() {
           <ConsultasIA scope="provider" />
         </TabsContent>
 
-        {/* ── Mi perfil (heredado, con datos reales de servicios) ── */}
+        {/* ── Mi perfil (editable: negocio + cuenta) ── */}
         <TabsContent value="perfil" className="mt-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
-              <h3 className="font-display font-extrabold">📊 Estado de verificación</h3>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Identidad (cédula)</span><span className="font-bold text-emerald-600">✔ Verificada</span></div>
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Teléfono</span><span className="font-bold text-emerald-600">✔ Verificado</span></div>
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Antecedentes</span><span className="text-xs text-muted-foreground">opcional — pendiente</span></div>
-                <p className="rounded-xl bg-accent/15 p-3 text-xs font-semibold text-accent-foreground">🔒 Tu documento está cifrado y solo el admin puede consultarlo. Nunca se muestra al público.</p>
-              </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="space-y-4">
+              <BusinessProfileEditor onSaved={loadProfile} />
             </div>
-            <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
-              <h3 className="font-display font-extrabold">💼 Resumen de negocio</h3>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Zona base</span><span className="font-bold">{provider?.zoneName}</span></div>
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Comisión plataforma</span><span className="font-bold">{settings?.commissionPct ?? 15}%</span></div>
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Servicios publicados</span><span className="font-bold">{services ? `${kpis.activos} activos de ${services.length}` : "…"}</span></div>
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Clientes en CRM</span><span className="font-bold">{crmStats ? crmStats.total : "…"}</span></div>
-                <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Tasa del día</span><span className="font-bold">{rate.toFixed(2)} Bs./$</span></div>
+            <div className="space-y-4">
+              <AccountProfileEditor />
+              <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
+                <h3 className="font-display font-extrabold">📊 Estado de verificación</h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Identidad (cédula)</span><span className="font-bold text-emerald-600">✔ Verificada</span></div>
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Teléfono</span><span className="font-bold text-emerald-600">✔ Verificado</span></div>
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Antecedentes</span><span className="text-xs text-muted-foreground">opcional — pendiente</span></div>
+                  <p className="rounded-xl bg-accent/15 p-3 text-xs font-semibold text-accent-foreground">🔒 Tu documento está cifrado y solo el admin puede consultarlo. Nunca se muestra al público.</p>
+                </div>
               </div>
-              <div className="mt-3 flex items-start gap-2 rounded-xl bg-secondary/60 p-3 text-xs text-muted-foreground">
-                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                Los pagos verificados se acumulan para tu próximo payout semanal (escrow lógico liberado por servicio completado).
+              <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
+                <h3 className="font-display font-extrabold">💼 Resumen de negocio</h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Zona base</span><span className="font-bold">{provider?.zoneName}</span></div>
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Comisión plataforma</span><span className="font-bold">{settings?.commissionPct ?? 15}%</span></div>
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Servicios publicados</span><span className="font-bold">{services ? `${kpis.activos} activos de ${services.length}` : "…"}</span></div>
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Clientes en CRM</span><span className="font-bold">{crmStats ? crmStats.total : "…"}</span></div>
+                  <div className="flex items-center justify-between rounded-xl bg-secondary/60 px-3 py-2"><span className="font-semibold">Tasa del día</span><span className="font-bold">{rate.toFixed(2)} Bs./$</span></div>
+                </div>
+                <div className="mt-3 flex items-start gap-2 rounded-xl bg-secondary/60 p-3 text-xs text-muted-foreground">
+                  <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  Los pagos verificados se acumulan para tu próximo payout semanal (escrow lógico liberado por servicio completado).
+                </div>
               </div>
             </div>
           </div>

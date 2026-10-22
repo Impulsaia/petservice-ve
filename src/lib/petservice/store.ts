@@ -35,6 +35,8 @@ export interface SessionUser {
   name: string;
   phone: string | null;
   role: Role;
+  /** Foto de perfil (data URL o https) — editable en Mi Perfil */
+  avatarUrl?: string | null;
 }
 
 interface BookingDraftRef {

@@ -237,7 +237,7 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
         const iw = infoWindowRef.current;
         if (!iw) return;
         const verified = p.status === "VERIFIED" || p.badges.includes("VERIFICADO");
-        const real = p.badges.includes("REAL");
+        const isNew = Boolean(p.isNew);
         const price = p.minPriceUsd;
         const driveTxt =
           p.driveMin != null && p.driveKm != null
@@ -249,7 +249,7 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
               `<div style="font-size:24px;line-height:1">${cm.emoji}</div>` +
               `<div style="min-width:0">` +
                 `<div style="font-weight:800;font-size:13.5px;color:#18181b;line-height:1.25">${esc(p.businessName)}` +
-                (real ? ` <span style="background:#99f6e4;color:#115e59;font-size:9.5px;font-weight:900;border-radius:9999px;padding:1px 5px;vertical-align:2px">Real</span>` : "") +
+                (isNew ? ` <span style="background:#f0abfc;color:#701a75;font-size:9.5px;font-weight:900;border-radius:9999px;padding:1px 5px;vertical-align:2px">✨ Nuevo</span>` : "") +
                 (verified ? ` <span title="Verificado" style="color:#059669;font-size:12px">✔</span>` : "") +
                 (rank.top ? ` <span title="4+ estrellas en Google Maps" style="background:#fef3c7;color:#92400e;font-size:9.5px;font-weight:900;border-radius:9999px;padding:1px 5px;vertical-align:2px">⭐ ${rank.google.toFixed(1)}</span>` : "") +
                 `</div>` +

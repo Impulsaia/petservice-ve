@@ -42,6 +42,7 @@ export function BookingWizard() {
   const [zone, setZone] = useState("Alta Vista");
   const [date, setDate] = useState(todayStr(1));
   const [slots, setSlots] = useState<{ time: string; available: boolean; reason?: string }[]>([]);
+  const [slotsTentative, setSlotsTentative] = useState(false);
   const [time, setTime] = useState<string | null>(null);
   const [method, setMethod] = useState<string>("PAGO_MOVIL");
   const [reference, setReference] = useState("");
@@ -93,9 +94,10 @@ export function BookingWizard() {
   // Slots al cambiar fecha
   const loadSlots = useCallback(() => {
     if (!bookingDraft || !serviceId) return;
-    apiGet<{ slots: typeof slots }>(`/api/bookings/slots?providerId=${bookingDraft.providerId}&date=${date}&serviceId=${serviceId}`)
+    apiGet<{ slots: typeof slots; tentative?: boolean }>(`/api/bookings/slots?providerId=${bookingDraft.providerId}&date=${date}&serviceId=${serviceId}`)
       .then((d) => {
         setSlots(d.slots);
+        setSlotsTentative(Boolean(d.tentative));
         setTime(null);
       })
       .catch(() => toast.error("Error cargando horarios"));
@@ -504,11 +506,18 @@ export function BookingWizard() {
                     😴 El prestador no atiende este día. Prueba otra fecha.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {slots.map((s) => (
-                      <SlotChip key={s.time} time={s.time} selected={time === s.time} disabled={!s.available} reason={s.reason} onClick={() => setTime(s.time)} />
-                    ))}
-                  </div>
+                  <>
+                    {slotsTentative && (
+                      <p className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-semibold text-accent-foreground">
+                        ℹ️ Este prestador aún no configura su horario semanal: se muestran horarios tentativos (8:00–17:00). Se coordinará contigo por WhatsApp tras reservar.
+                      </p>
+                    )}
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                      {slots.map((s) => (
+                        <SlotChip key={s.time} time={s.time} selected={time === s.time} disabled={!s.available} reason={s.reason} onClick={() => setTime(s.time)} />
+                      ))}
+                    </div>
+                  </>
                 )}
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Clock3 className="h-3.5 w-3.5" /> Duración estimada: {service?.durationMin ?? 60} min

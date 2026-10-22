@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, MapPin, ShieldCheck, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote, Landmark, MessageCircle } from "lucide-react";
+import { ArrowLeft, MapPin, ShieldCheck, Star, Clock3, PawPrint, CalendarPlus, Info, MessageSquareQuote, MessageCircle, Navigation, Instagram, Facebook, Globe, Music2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +19,8 @@ interface Detail {
     city: string; zoneName: string; lat: number; lng: number; radiusKm: number;
     scheduleJson: string; ratingAvg: number; ratingCount: number; badges: string;
     googleRating?: number | null; googleReviews?: number | null;
+    avatarUrl?: string | null; isNew?: boolean;
+    socials?: { instagram?: string | null; facebook?: string | null; tiktok?: string | null; website?: string | null };
   };
   services: {
     id: string; category: string; name: string; description: string; durationMin: number;
@@ -27,6 +29,11 @@ interface Detail {
   reviews: { id: string; authorName: string; rating: number; comment: string; tags: string; response: string | null; createdAt: string }[];
   tagCounts: Record<string, number>;
   drive?: { km: number | null; min: number | null; straightKm: number | null } | null;
+}
+
+/** Enlace universal de Google Maps para trazar la ruta hasta el prestador */
+function gmapsDirectionsUrl(lat: number, lng: number, name: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_query=${encodeURIComponent(name)}`;
 }
 
 const WEEK_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
@@ -80,11 +87,16 @@ export function ProviderDetailView() {
           <div className="-mt-10 flex flex-wrap items-end justify-between gap-3">
             <div className="flex items-end gap-3">
               <span className="ring-4 ring-card">
-                <Avatar name={provider.businessName} emoji={meta.emoji} className="h-20 w-20 text-3xl" />
+                <Avatar name={provider.businessName} emoji={meta.emoji} src={provider.avatarUrl ?? undefined} className="h-20 w-20 text-3xl" />
               </span>
               <div className="pb-1">
                 <h1 className="font-display text-2xl font-black leading-tight">{provider.businessName}</h1>
                 <p className="text-sm text-muted-foreground">por {provider.ownerName} · {provider.city}</p>
+                {provider.isNew && (
+                  <span title="Prestador registrado recientemente en PetService-VE" className="mt-1 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-500 px-2.5 py-0.5 text-[11px] font-black text-white shadow-sm">
+                    ✨ Nuevo prestador
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pb-1">
@@ -99,6 +111,15 @@ export function ProviderDetailView() {
                   <MessageSquareQuote className="h-3.5 w-3.5" /> Consultar por WhatsApp
                 </a>
               )}
+              <a
+                href={gmapsDirectionsUrl(provider.lat, provider.lng, provider.businessName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir la ruta hasta este prestador en Google Maps"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90 md:h-8"
+              >
+                <Navigation className="h-3.5 w-3.5" /> Cómo llegar
+              </a>
               {provider.badges.split(",").filter(Boolean).map((b) => (
                 <span
                   key={b}
@@ -107,16 +128,14 @@ export function ProviderDetailView() {
                     b === "VERIFICADO" && "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
                     b === "TOP" && "bg-accent text-accent-foreground",
                     b === "GATOS" && "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
-                    b === "EXPRESS" && "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300",
-                    b === "REAL" && "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
+                    b === "EXPRESS" && "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300"
                   )}
                 >
                   {b === "VERIFICADO" && <ShieldCheck className="h-3.5 w-3.5" />}
                   {b === "TOP" && <Star className="h-3.5 w-3.5" />}
                   {b === "GATOS" && "🐈"}
                   {b === "EXPRESS" && "⚡"}
-                  {b === "REAL" && <Landmark className="h-3.5 w-3.5" />}
-                  {b === "VERIFICADO" ? "Identidad verificada" : b === "TOP" ? "Top calificado" : b === "GATOS" ? "Amigable con gatos" : b === "REAL" ? "✅ Negocio real" : "Entrega express"}
+                  {b === "VERIFICADO" ? "Identidad verificada" : b === "TOP" ? "Top calificado" : b === "GATOS" ? "Amigable con gatos" : "Entrega express"}
                 </span>
               ))}
             </div>
@@ -313,6 +332,33 @@ export function ProviderDetailView() {
             <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
               <h3 className="font-display font-extrabold">Sobre {provider.businessName}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{provider.bio}</p>
+              {(provider.socials?.instagram || provider.socials?.facebook || provider.socials?.tiktok || provider.socials?.website) && (
+                <div className="mt-4">
+                  <h4 className="text-xs font-black uppercase tracking-wide text-muted-foreground">Redes y contacto</h4>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {provider.socials?.instagram && (
+                      <a href={provider.socials.instagram} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-xs font-bold transition-colors hover:bg-secondary/70">
+                        <Instagram className="h-3.5 w-3.5 text-pink-500" /> Instagram
+                      </a>
+                    )}
+                    {provider.socials?.facebook && (
+                      <a href={provider.socials.facebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-xs font-bold transition-colors hover:bg-secondary/70">
+                        <Facebook className="h-3.5 w-3.5 text-sky-600" /> Facebook
+                      </a>
+                    )}
+                    {provider.socials?.tiktok && (
+                      <a href={provider.socials.tiktok} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-xs font-bold transition-colors hover:bg-secondary/70">
+                        <Music2 className="h-3.5 w-3.5" /> TikTok
+                      </a>
+                    )}
+                    {provider.socials?.website && (
+                      <a href={provider.socials.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-xs font-bold transition-colors hover:bg-secondary/70">
+                        <Globe className="h-3.5 w-3.5 text-primary" /> Sitio web
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="mt-4 flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
                 Verificación PetService: identidad y teléfono confirmados. El documento de identidad está protegido y solo el equipo de soporte puede consultarlo — nunca se muestra públicamente.
@@ -334,6 +380,19 @@ export function ProviderDetailView() {
                   <span className="font-bold">A domicilio 🏠</span>
                 </div>
               </div>
+              <a
+                href={gmapsDirectionsUrl(provider.lat, provider.lng, provider.businessName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Navigation className="h-4 w-4" /> Cómo llegar — abrir ruta en Google Maps
+              </a>
+              {data.drive?.km != null && data.drive?.min != null && (
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Desde tu punto de búsqueda: {fmtDrive(data.drive.km, data.drive.min)} en carro
+                </p>
+              )}
             </div>
           </div>
         </TabsContent>

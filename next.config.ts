@@ -26,6 +26,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
+  // /restablecer?token=… (enlace real de los emails de Resend) sirve la SPA "/"
+  // sin 404: LoginView lee el pathname y abre el paso 2 del reset con el token.
+  async rewrites() {
+    return [{ source: "/restablecer", destination: "/" }];
+  },
 };
 
 export default nextConfig;

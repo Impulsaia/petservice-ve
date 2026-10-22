@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ import { apiGet, apiPost, apiPatch } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
 import { fmtUsd, fmtBs, fmtDateTime, fmtRelative } from "@/lib/petservice/format";
 import { Avatar, BookingStatusBadge, PaymentStatusBadge, ProviderStatusBadge, NotifStatusBadge, RatingStars, EmptyState } from "@/components/petservice/shared";
+import { AccountProfileEditor } from "@/components/petservice/account-settings";
 import { ConsultasIA } from "@/components/petservice/ConsultasIA";
 import {
   UsersSection, ServicesSection, BookingsSection, SectorsSection, FirulaisSection,
@@ -57,7 +59,7 @@ const PROVIDER_ACTION_MSG: Record<string, string> = {
 };
 
 export function AdminPanel() {
-  const { settings, setSettings, bumpData } = useAppStore();
+  const { settings, setSettings, bumpData, user } = useAppStore();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
@@ -65,6 +67,11 @@ export function AdminPanel() {
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [notifs, setNotifs] = useState<NotifRow[]>([]);
   const [tab, setTab] = useState("resumen");
+
+  // Detalle de pago (click en la fila) + perfil propio del admin
+  const [payDetail, setPayDetail] = useState<PaymentRow | null>(null);
+  const [reconBusy, setReconBusy] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Filtros de prestadores (estado local, filtrado en cliente)
   const [provQ, setProvQ] = useState("");
@@ -94,13 +101,21 @@ export function AdminPanel() {
     load();
   }, [load, bumpData]);
 
-  async function reconcile(p: PaymentRow, action: "verify" | "reject") {
+  async function reconcile(p: PaymentRow, action: "verify" | "reject", fromDialog = false) {
+    setReconBusy(true);
     try {
       await apiPost(`/api/payments/${p.id}/reconcile`, { action });
-      toast.success(action === "verify" ? `Pago de ${p.booking.code} verificado ✅` : `Pago de ${p.booking.code} rechazado`);
+      toast.success(action === "verify"
+        ? `Pago de ${p.booking.code} verificado ✅ La reserva quedó CONFIRMADA.`
+        : `Pago de ${p.booking.code} rechazado. El cliente debe enviar otro comprobante.`);
+      setPayDetail(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error");
+      toast.error(e instanceof Error ? e.message : "Error al conciliar el pago");
+      if (fromDialog) setPayDetail(null); // si ya estaba verificado, refresca la cola
+      load();
+    } finally {
+      setReconBusy(false);
     }
   }
 
@@ -167,12 +182,22 @@ export function AdminPanel() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <Avatar name="Admin PetService" emoji="🛡️" className="h-12 w-12 text-xl" />
-        <div>
-          <h1 className="font-display text-2xl font-black">Panel de Administración</h1>
-          <p className="text-sm text-muted-foreground">Métricas, verificaciones, usuarios, servicios, reservas y auditoría global</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={user?.name ?? "Admin PetService"} emoji="🛡️" src={user?.avatarUrl ?? undefined} className="h-12 w-12 text-xl" />
+          <div>
+            <h1 className="font-display text-2xl font-black">Panel de Administración</h1>
+            <p className="text-sm text-muted-foreground">Métricas, verificaciones, usuarios, servicios, reservas y auditoría global</p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setProfileOpen(true)}
+          className="rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-left shadow-sm transition-colors hover:border-primary/40"
+        >
+          <div className="text-sm font-extrabold">{user?.name ?? "Admin"}</div>
+          <div className="text-xs text-muted-foreground">{user?.email} · editar perfil y clave</div>
+        </button>
       </div>
 
       {/* KPIs */}
@@ -376,7 +401,15 @@ export function AdminPanel() {
             <div className="scroll-slim max-h-[480px] divide-y divide-border/60 overflow-y-auto">
               {pendingPayments.length === 0 && <div className="p-8"><EmptyState emoji="✅" title="Todo conciliado" desc="No hay pagos pendientes de verificación." /></div>}
               {pendingPayments.map((p) => (
-                <div key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div
+                  key={p.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setPayDetail(p)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setPayDetail(p); }}
+                  className="flex cursor-pointer flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary/40"
+                  title="Abrir detalle para conciliar"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
                       <span className="font-mono text-muted-foreground">{p.booking.code}</span>
@@ -393,11 +426,11 @@ export function AdminPanel() {
                     <div className="font-display font-black text-primary">{fmtUsd(p.amountUsd)}</div>
                     <div className="text-[11px] text-muted-foreground">{fmtBs(p.amountBs)}</div>
                   </div>
-                  <div className="flex gap-1.5">
-                    <Button size="sm" onClick={() => reconcile(p, "verify")} className="h-8 rounded-lg bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-700">
+                  <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" disabled={reconBusy} onClick={() => reconcile(p, "verify")} className="h-8 rounded-lg bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-700">
                       <Check className="h-3.5 w-3.5" /> Conciliar
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => reconcile(p, "reject")} className="h-8 rounded-lg px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950">
+                    <Button size="sm" disabled={reconBusy} variant="ghost" onClick={() => reconcile(p, "reject")} className="h-8 rounded-lg px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950">
                       <X className="h-3.5 w-3.5" /> Rechazar
                     </Button>
                   </div>
@@ -556,6 +589,58 @@ export function AdminPanel() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Detalle de pago: conciliar desde el click en la fila */}
+      <Dialog open={!!payDetail} onOpenChange={(o) => !o && setPayDetail(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display font-black">
+              Pago {payDetail?.booking.code} {payDetail && <PaymentStatusBadge status={payDetail.status} />}
+            </DialogTitle>
+            <DialogDescription>Conciliación manual de pago — verifica la referencia en tu banco antes de confirmar.</DialogDescription>
+          </DialogHeader>
+          {payDetail && (
+            <div className="space-y-3">
+              <div className="grid gap-2 rounded-2xl border border-border/70 p-3 text-sm">
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Reserva</span><span className="font-mono font-bold">{payDetail.booking.code}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Estado reserva</span><BookingStatusBadge status={payDetail.booking.status} /></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Cliente</span><span className="font-bold">{payDetail.booking.client.name}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Prestador</span><span className="font-bold">{payDetail.booking.provider.businessName}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Servicio</span><span className="font-bold">{payDetail.booking.service.name}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Método</span><span className="rounded bg-secondary px-2 py-0.5 text-xs font-bold uppercase">{payDetail.method.replace("_", " ")}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Referencia</span><span className="font-mono text-xs font-bold">{payDetail.reference ?? "—"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Enviado</span><span className="text-xs">{fmtDateTime(payDetail.createdAt)}</span></div>
+                <div className="flex items-center justify-between border-t border-dashed border-border/70 pt-2">
+                  <span className="font-bold">Monto</span>
+                  <span className="text-right">
+                    <span className="font-display text-lg font-black text-primary">{fmtUsd(payDetail.amountUsd)}</span>
+                    <span className="block text-[11px] text-muted-foreground">{fmtBs(payDetail.amountBs)}</span>
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button disabled={reconBusy} onClick={() => reconcile(payDetail, "verify", true)} className="h-11 flex-1 rounded-xl bg-emerald-600 font-bold hover:bg-emerald-700">
+                  <Check className="h-4 w-4" /> {reconBusy ? "Procesando…" : "Conciliar (marcar pagado)"}
+                </Button>
+                <Button disabled={reconBusy} variant="ghost" onClick={() => reconcile(payDetail, "reject", true)} className="h-11 rounded-xl font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950">
+                  <X className="h-4 w-4" /> Rechazar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Perfil del admin (foto, nombre, email, cambio de clave) */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display font-black">Mi perfil 🛡️</DialogTitle>
+            <DialogDescription>Tu cuenta de administrador: foto, datos de contacto y contraseña.</DialogDescription>
+          </DialogHeader>
+          <AccountProfileEditor />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

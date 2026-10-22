@@ -62,6 +62,18 @@ model Provider {
   // badges separados por coma: VERIFICADO, TOP, EXPRESS, GATOS
   badges       String @default("")
 
+  // ── Perfil ampliado (editable por el prestador) ──
+  // Foto/logotipo del negocio (data URL redimensionada en el cliente o URL)
+  avatarUrl    String?
+  instagram    String?
+  facebook     String?
+  tiktok       String?
+  website      String?
+  // Origen: "" | "OSM" | "BOLIVAR" | "ZONA" (importados) | "MANUAL" (registro público)
+  source       String   @default("")
+  // Registro manual: etiqueta "Nuevo prestador" visible hasta esta fecha (1 mes)
+  newUntil     DateTime?
+
   services Service[]
   bookings Booking[]
   reviews  Review[]
@@ -110,6 +122,9 @@ model Pet {
   weightKg    Float?
   // MACHO | HEMBRA | N/D
   gender      String?
+  photoUrl    String?   // foto de la mascota (data URL redimensionada en el cliente)
+  // Notas médicas / historial de atención (vacunas, alergias, tratamientos…)
+  medicalNotes String?
 
   bookings Booking[]
 }

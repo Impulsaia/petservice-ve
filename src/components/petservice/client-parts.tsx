@@ -17,9 +17,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Cake, Loader2, Pencil, Trash2, Weight, type LucideIcon } from "lucide-react";
+import { Cake, Loader2, Pencil, Trash2, Weight, Stethoscope, type LucideIcon } from "lucide-react";
 import { apiPost, apiPatch } from "@/lib/petservice/api";
 import { PET_SIZES } from "@/lib/petservice/constants";
+import { PhotoPicker } from "@/components/petservice/shared";
 
 // ───────────────────────── Contrato de mascota (GET/POST/PATCH /api/pets) ─────────────────────────
 
@@ -33,6 +34,8 @@ export interface PetFull {
   birthDate: string | null; // ISO → "YYYY-MM-DD"
   weightKg: number | null;
   gender: string | null; // MACHO | HEMBRA | N/D | null
+  photoUrl?: string | null; // foto de la mascota (data URL)
+  medicalNotes?: string | null; // historial médico / de atención
 }
 
 // ───────────────────────── Metadatos de especie ─────────────────────────
@@ -164,9 +167,13 @@ export function PetCard({ pet, onEdit, onDeleted }: {
       {/* Cabecera: emoji + nombre + especie/raza + tamaño */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
-          <span aria-hidden className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-3xl">
-            {petEmoji(pet.species)}
-          </span>
+          {pet.photoUrl ? (
+            <img src={pet.photoUrl} alt={`Foto de ${pet.name}`} className="h-14 w-14 shrink-0 rounded-2xl object-cover" />
+          ) : (
+            <span aria-hidden className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-3xl">
+              {petEmoji(pet.species)}
+            </span>
+          )}
           <div className="min-w-0">
             <h3 className="truncate font-display text-base font-extrabold leading-tight">{pet.name}</h3>
             <p className="truncate text-xs text-muted-foreground">
@@ -207,6 +214,14 @@ export function PetCard({ pet, onEdit, onDeleted }: {
       {/* Notas */}
       {pet.notes && (
         <p className="mt-2 line-clamp-2 text-xs italic leading-relaxed text-muted-foreground">📝 {pet.notes}</p>
+      )}
+
+      {/* Notas médicas / historial de atención */}
+      {pet.medicalNotes && (
+        <div className="mt-2 rounded-xl bg-teal-50 px-3 py-2 text-xs leading-relaxed text-teal-900 dark:bg-teal-950/40 dark:text-teal-200">
+          <span className="flex items-center gap-1 font-bold"><Stethoscope className="h-3.5 w-3.5 shrink-0" aria-hidden /> Ficha médica</span>
+          <p className="mt-0.5 whitespace-pre-line">{pet.medicalNotes}</p>
+        </div>
       )}
 
       {/* Acciones */}
@@ -270,9 +285,11 @@ interface PetFormState {
   weightKg: string;
   gender: string; // "" | MACHO | HEMBRA | ND (Radix Select no acepta value="")
   notes: string;
+  medicalNotes: string;
+  photoUrl: string | null;
 }
 
-const EMPTY_FORM: PetFormState = { name: "", species: "PERRO", size: "S", breed: "", birthDate: "", weightKg: "", gender: "ND", notes: "" };
+const EMPTY_FORM: PetFormState = { name: "", species: "PERRO", size: "S", breed: "", birthDate: "", weightKg: "", gender: "ND", notes: "", medicalNotes: "", photoUrl: null };
 
 export function PetFormDialog({ open, pet, onClose, onSaved }: {
   open: boolean;
@@ -303,6 +320,8 @@ export function PetFormDialog({ open, pet, onClose, onSaved }: {
             weightKg: pet.weightKg !== null && pet.weightKg !== undefined ? String(pet.weightKg) : "",
             gender: pet.gender === "MACHO" || pet.gender === "HEMBRA" ? pet.gender : "ND",
             notes: pet.notes ?? "",
+            medicalNotes: pet.medicalNotes ?? "",
+            photoUrl: pet.photoUrl ?? null,
           }
         : EMPTY_FORM
     );
@@ -327,7 +346,8 @@ export function PetFormDialog({ open, pet, onClose, onSaved }: {
       const w = Number(form.weightKg.replace(",", "."));
       if (!Number.isFinite(w) || w < 0 || w > 120) errs.weightKg = "El peso debe estar entre 0 y 120 kg";
     }
-    if (form.notes.length > 200) errs.notes = "Máximo 200 caracteres";
+    if (form.notes.length > 500) errs.notes = "Máximo 500 caracteres";
+    if (form.medicalNotes.length > 1000) errs.medicalNotes = "Máximo 1000 caracteres";
     setErrors(errs);
     return Object.values(errs).every((v) => !v);
   }
@@ -345,6 +365,8 @@ export function PetFormDialog({ open, pet, onClose, onSaved }: {
       weightKg: form.weightKg === "" ? "" : String(Number(form.weightKg.replace(",", "."))),
       gender: form.gender === "ND" ? "" : form.gender,
       notes: form.notes.trim(),
+      medicalNotes: form.medicalNotes.trim(),
+      photoUrl: form.photoUrl,
     };
     try {
       const saved = pet
@@ -492,17 +514,42 @@ export function PetFormDialog({ open, pet, onClose, onSaved }: {
           </div>
 
           <div className="col-span-2">
+            <Label className="text-xs font-bold">Foto de {isEdit ? pet?.name : "tu mascota"}</Label>
+            <div className="mt-1.5">
+              <PhotoPicker
+                value={form.photoUrl}
+                name={form.name || "Mascota"}
+                onChange={(v) => setForm((f) => ({ ...f, photoUrl: v }))}
+              />
+            </div>
+          </div>
+
+          <div className="col-span-2">
             <Label htmlFor="pet-notes" className="text-xs font-bold">Notas para el prestador</Label>
             <Textarea
               id="pet-notes"
               value={form.notes}
               onChange={(e) => setField("notes", e.target.value)}
               rows={2}
-              maxLength={200}
+              maxLength={500}
               placeholder="Ej: Nervioso con secadores, usar toalla"
               className="mt-1 rounded-2xl"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">{form.notes.length}/200 caracteres</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{form.notes.length}/500 caracteres</p>
+          </div>
+
+          <div className="col-span-2 rounded-xl border border-teal-500/30 bg-teal-50/50 p-3 dark:bg-teal-950/20">
+            <Label htmlFor="pet-medical" className="flex items-center gap-1.5 text-xs font-bold"><Stethoscope className="h-3.5 w-3.5" aria-hidden /> Ficha médica e historial de atención</Label>
+            <Textarea
+              id="pet-medical"
+              value={form.medicalNotes}
+              onChange={(e) => setField("medicalNotes", e.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder="Vacunas, alergias, medicamentos, tratamientos, cirugías, veterinario de cabecera…"
+              className="mt-1 rounded-2xl"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">Opcional · {form.medicalNotes.length}/1000 caracteres — solo la ves tú y quien atiende a tu mascota.</p>
           </div>
 
           {apiErr && (

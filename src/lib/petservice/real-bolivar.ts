@@ -262,7 +262,7 @@ function fallbackZone(address: string, cityName: string): string {
 
 function buildBio(row: RichRow, zone: string, phones: string[]): string {
   const lines: string[] = [];
-  lines.push(`✅ Negocio real — ${row.tipo}`);
+  lines.push(row.tipo);
   if (row.servicios) lines.push(`🛎️ ${row.servicios}`);
   lines.push(`📍 ${[row.direccion, row.ciudad].filter(Boolean).join(" · ")}`);
   if (row.rating) lines.push(`⭐ ${row.rating} en Google Maps`);

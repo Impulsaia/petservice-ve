@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   if (auth instanceof NextResponse) return auth;
   if (auth.role !== "CLIENT") return NextResponse.json({ error: "Solo los clientes registran mascotas" }, { status: 403 });
 
-  const body = await readJson<Record<string, unknown>>(req, 4096);
+  const body = await readJson<Record<string, unknown>>(req, 600_000);
   if (!body) return jsonError("Solicitud inválida", 400);
 
   const name = cleanText(body.name, 40);
@@ -60,7 +60,14 @@ export async function POST(req: Request) {
       species,
       size,
       breed: body?.breed ? cleanText(body.breed, 40) : null,
-      notes: body?.notes ? cleanText(body.notes, 200) : null,
+      notes: body?.notes ? cleanText(body.notes, 500) : null,
+      medicalNotes: body?.medicalNotes ? cleanText(body.medicalNotes, 1000) : null,
+      photoUrl:
+        typeof body?.photoUrl === "string" && body.photoUrl
+          ? (body.photoUrl.startsWith("data:image/") || /^https:\/\//.test(body.photoUrl)) && body.photoUrl.length <= 500_000
+            ? body.photoUrl
+            : null
+          : null,
       birthDate,
       weightKg,
       gender,

@@ -65,6 +65,23 @@ export function LoginView() {
 
   // Recuperación de contraseña
   const [forgotOpen, setForgotOpen] = useState(false);
+  // Enlace real del email: /restablecer?token=… (rewrite → “/” con pathname intacto)
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      if (window.location.pathname !== "/restablecer") return;
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get("token");
+      if (t) {
+        setResetToken(t);
+        setForgotOpen(true);
+        // Limpia la query para que el token no quede en el historial
+        window.history.replaceState(null, "", "/");
+      }
+    } catch {
+      /* entorno sin history (raro) — ignorar */
+    }
+  }, []);
 
   function afterAuth(u: AuthResponse["user"], welcome?: string) {
     setUser(u);
@@ -468,7 +485,12 @@ export function LoginView() {
       </section>
 
       {/* ── Dialog de recuperación de contraseña (2 pasos) ── */}
-      <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} onDone={onResetDone} />
+      <ForgotPasswordDialog
+        open={forgotOpen}
+        onOpenChange={(v) => { setForgotOpen(v); if (!v) setResetToken(null); }}
+        onDone={onResetDone}
+        initialToken={resetToken}
+      />
     </div>
   );
 }
@@ -488,10 +510,12 @@ function GoogleIcon({ className }: { className?: string }) {
 
 // ───────────────────────── Recuperación de contraseña (2 pasos) ─────────────────────────
 
-function ForgotPasswordDialog({ open, onOpenChange, onDone }: {
+function ForgotPasswordDialog({ open, onOpenChange, onDone, initialToken }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onDone: (email: string) => void;
+  /** Token del enlace email (/restablecer?token=…): abre directo en el paso 2 */
+  initialToken?: string | null;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState("");
@@ -510,6 +534,21 @@ function ForgotPasswordDialog({ open, onOpenChange, onDone }: {
   // Reset completo cada vez que se abre
   useEffect(() => {
     if (!open) return;
+    if (initialToken) {
+      // Llegada desde el email: directo al paso 2 con el token precargado
+      setStep(2);
+      setToken(initialToken);
+      setEmailErr(null);
+      setSentMsg(null);
+      setDemoUrl(null);
+      setStep1Err(null);
+      setPw("");
+      setPw2("");
+      setShowPw(false);
+      setStep2Err(null);
+      setBusy(false);
+      return;
+    }
     setStep(1);
     setEmail("");
     setEmailErr(null);
@@ -522,7 +561,7 @@ function ForgotPasswordDialog({ open, onOpenChange, onDone }: {
     setShowPw(false);
     setStep2Err(null);
     setBusy(false);
-  }, [open]);
+  }, [open, initialToken]);
 
   async function sendLink() {
     const em = email.trim().toLowerCase();

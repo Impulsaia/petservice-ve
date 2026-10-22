@@ -25,7 +25,14 @@ export async function GET(req: Request) {
   const d = new Date(`${date}T12:00:00.000Z`);
   const weekday = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
   const schedule = JSON.parse(provider.scheduleJson || "{}") as Record<string, [string, string][]>;
-  const ranges = schedule[String(weekday)] ?? [];
+  let ranges = schedule[String(weekday)] ?? [];
+  // Prestador sin agenda configurada ({}): agenda TENTATIVA 8:00–17:00 con pausa
+  // de almuerzo para que los clientes puedan reservar de una vez (los slots no
+  // desaparecen; el prestador puede ajustar su horario real desde su panel).
+  const hasAnySchedule = Object.values(schedule).some((r) => Array.isArray(r) && r.length > 0);
+  if (!hasAnySchedule) {
+    ranges = [["08:00", "12:00"], ["14:00", "17:00"]];
+  }
 
   // Slots ya ocupados (reservas activas del día)
   const dayStart = new Date(`${date}T00:00:00.000Z`);
@@ -66,5 +73,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ date, weekday, slots, durationMin });
+  return NextResponse.json({ date, weekday, slots, durationMin, tentative: !hasAnySchedule });
 }

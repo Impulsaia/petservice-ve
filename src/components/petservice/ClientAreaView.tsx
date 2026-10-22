@@ -18,6 +18,7 @@ import { REVIEW_TAGS, PET_SIZES, BOOKING_STATUS } from "@/lib/petservice/constan
 import { fmtUsd, fmtBs, fmtDateTime, fmtRelative, waLink } from "@/lib/petservice/format";
 import { Avatar, BookingStatusBadge, PaymentStatusBadge, EmptyState, CategoryIcon } from "@/components/petservice/shared";
 import { PetCard, PetFormDialog, StatCard, SPECIES_META, type PetFull } from "@/components/petservice/client-parts";
+import { AccountProfileEditor } from "@/components/petservice/account-settings";
 
 interface BookingItem {
   id: string; code: string; status: string; address: string; scheduledAt: string;
@@ -158,7 +159,7 @@ export function ClientAreaView() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <Avatar name={user?.name ?? "Cliente"} className="h-12 w-12 text-xl" />
+        <Avatar name={user?.name ?? "Cliente"} src={user?.avatarUrl ?? undefined} className="h-12 w-12 text-xl" />
         <div>
           <h1 className="font-display text-2xl font-black">¡Hola, {user?.name.split(" ")[0] ?? "cliente"}! 👋</h1>
           <p className="text-sm text-muted-foreground">Este es el resumen de tus peluditos y reservas</p>
@@ -193,6 +194,7 @@ export function ClientAreaView() {
           <TabsTrigger value="reservas" className="gap-1.5 rounded-xl font-bold"><CalendarDays className="h-4 w-4" /> Reservas</TabsTrigger>
           <TabsTrigger value="mascotas" className="gap-1.5 rounded-xl font-bold"><PawPrint className="h-4 w-4" /> Mascotas</TabsTrigger>
           <TabsTrigger value="notifs" className="gap-1.5 rounded-xl font-bold"><Bell className="h-4 w-4" /> Notificaciones</TabsTrigger>
+          <TabsTrigger value="perfil" className="gap-1.5 rounded-xl font-bold">👤 Mi perfil</TabsTrigger>
         </TabsList>
 
         {/* ─────────── Reservas ─────────── */}
@@ -242,6 +244,13 @@ export function ClientAreaView() {
               </div>
             )}
           </section>
+        </TabsContent>
+
+        {/* ─────────── Mi perfil ─────────── */}
+        <TabsContent value="perfil" className="mt-4">
+          <div className="mx-auto max-w-2xl">
+            <AccountProfileEditor />
+          </div>
         </TabsContent>
 
         {/* ─────────── Mascotas (pro) ─────────── */}

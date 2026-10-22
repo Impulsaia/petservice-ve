@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Bootstrap: sesión + settings al montar
   useEffect(() => {
-    apiGet<{ user: { id: string; name: string; role: string } | null }>("/api/auth/me")
+    apiGet<{ user: { id: string; email: string; name: string; role: string; phone: string | null; avatarUrl: string | null } | null }>("/api/auth/me")
       .then((d) => setUser(d.user))
       .catch(() => setUser(null))
       .finally(() => setAuthLoaded(true));
@@ -54,6 +54,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setView("login");
         toast.info("Google aún no está configurado en esta demo — entra con tu correo o prueba las cuentas demo 🐾");
       }
+      // Enlace de restablecimiento (email real): fuerza el login para consumir el token
+      if (window.location.pathname === "/restablecer") setView("login");
     } catch {
       /* entorno sin history (raro) — ignorar */
     }
@@ -159,8 +161,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className="hidden max-w-[160px] items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-1.5 sm:inline-flex"
                   title={`Sesión: ${user.email}`}
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/15 text-[11px] font-black text-primary">
-                    {user.name.slice(0, 1).toUpperCase()}
+                  <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-lg bg-primary/15 text-[11px] font-black text-primary">
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      user.name.slice(0, 1).toUpperCase()
+                    )}
                   </span>
                   <span className="min-w-0 leading-none">
                     <span className="block truncate text-xs font-bold">{user.name}</span>

@@ -22,7 +22,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // 404 sin filtrar existencia si no es dueño (anti-IDOR)
   if (!pet || pet.ownerId !== auth.id) return jsonError("Mascota no encontrada", 404);
 
-  const body = await readJson<Record<string, unknown>>(req, 4096);
+  const body = await readJson<Record<string, unknown>>(req, 600_000);
   if (!body) return jsonError("Solicitud inválida", 400);
 
   const data: Record<string, unknown> = {};
@@ -42,7 +42,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.size = size;
   }
   if (body.breed !== undefined) data.breed = body.breed ? cleanText(body.breed, 40) : null;
-  if (body.notes !== undefined) data.notes = body.notes ? cleanText(body.notes, 200) : null;
+  if (body.notes !== undefined) data.notes = body.notes ? cleanText(body.notes, 500) : null;
+  if (body.medicalNotes !== undefined) data.medicalNotes = body.medicalNotes ? cleanText(body.medicalNotes, 1000) : null;
+  if (body.photoUrl !== undefined) {
+    const ph = typeof body.photoUrl === "string" ? body.photoUrl.trim() : "";
+    if (!ph) data.photoUrl = null;
+    else {
+      const isData = ph.startsWith("data:image/") && ph.length <= 500_000;
+      const isHttps = /^https:\/\/\S{1,500}$/.test(ph);
+      if (!isData && !isHttps) return jsonError("Foto inválida (usa una imagen o URL https)", 400);
+      data.photoUrl = ph;
+    }
+  }
   if (body.birthDate !== undefined) {
     if (body.birthDate === null || body.birthDate === "") {
       data.birthDate = null;

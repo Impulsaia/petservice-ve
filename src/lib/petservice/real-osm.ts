@@ -93,7 +93,7 @@ const KIND_LABEL: Record<RealOsmRow["kind"], string> = {
 
 function buildBio(row: RealOsmRow): string {
   const lines: string[] = [];
-  lines.push(`✅ Negocio real — ${KIND_LABEL[row.kind]} (OpenStreetMap)`);
+  lines.push(KIND_LABEL[row.kind]);
   if (row.address) lines.push(`📍 ${row.address} · ${row.city}`);
   if (row.hours) lines.push(`🕐 ${row.hours}`);
   if (row.phones.length) lines.push(`📞 ${row.phones.join(" · ")}`);
@@ -112,26 +112,38 @@ function buildBio(row: RealOsmRow): string {
 
 export interface WipeResult { providers: number; users: number; bookings: number; reviews: number; crm: number }
 
-/** Elimina TODO prestador sin badge REAL y sus datos dependientes (demo ficticio). */
+/**
+ * Elimina TODO prestador importado sin badge REAL (demo ficticio) y SOLO sus
+ * datos dependientes. Los prestadores registrados manualmente (source="MANUAL",
+ * p. ej. "Furulais PZO") NUNCA se borran, y sus reservas, pagos, reseñas, CRM
+ * y eventos de agenda tampoco: así "Reiniciar datos demo" ya no destruye el
+ * historial real creado por usuarios.
+ */
 export async function wipeFictionalProviders(): Promise<WipeResult> {
   const counts: WipeResult = { providers: 0, users: 0, bookings: 0, reviews: 0, crm: 0 };
 
-  // Reservas / reseñas / pagos (toda la demo histórica)
-  counts.reviews = (await db.review.deleteMany({})).count;
-  await db.payment.deleteMany({});
-  counts.bookings = (await db.booking.deleteMany({})).count;
+  const fictional = await db.provider.findMany({
+    where: { AND: [{ badges: { not: { contains: "REAL" } } }, { source: { not: "MANUAL" } }] },
+    select: { id: true },
+  });
+  const ids = fictional.map((p) => p.id);
 
-  // CRM y agenda de los prestadores ficticios
-  counts.crm = (await db.crmContact.deleteMany({})).count;
-  await db.calendarEvent.deleteMany({});
+  if (ids.length > 0) {
+    // Reseñas de los prestadores ficticios
+    counts.reviews = (await db.review.deleteMany({ where: { providerId: { in: ids } } })).count;
+    // Pagos de las reservas de los ficticios (Payment.bookingId es unique → borrar antes)
+    await db.payment.deleteMany({ where: { booking: { providerId: { in: ids } } } });
+    // Reservas de los ficticios
+    counts.bookings = (await db.booking.deleteMany({ where: { providerId: { in: ids } } })).count;
+    // CRM y agenda SOLO de los ficticios
+    counts.crm = (await db.crmContact.deleteMany({ where: { providerId: { in: ids } } })).count;
+    await db.calendarEvent.deleteMany({ where: { providerId: { in: ids } } });
 
-  // Notificaciones demo
-  await db.notification.deleteMany({});
-
-  // Servicios y prestadores ficticios
-  await db.service.deleteMany({ where: { provider: { badges: { not: { contains: "REAL" } } } } });
-  const del = await db.provider.deleteMany({ where: { badges: { not: { contains: "REAL" } } } });
-  counts.providers = del.count;
+    // Servicios y prestadores ficticios
+    await db.service.deleteMany({ where: { providerId: { in: ids } } });
+    const del = await db.provider.deleteMany({ where: { id: { in: ids } } });
+    counts.providers = del.count;
+  }
 
   // Usuarios prestador huérfanos (sin provider)
   const orphanUsers = await db.user.deleteMany({ where: { role: "PROVIDER", provider: null } });
@@ -208,7 +220,7 @@ export async function syncRealOsmBusinesses(log = false): Promise<OsmSyncResult>
         providerId: provider.id,
         category: plan.category,
         name: plan.name.slice(0, 80),
-        description: `Negocio real de OpenStreetMap${row.address ? ` — ${row.address}` : ""}${row.hours ? `. Horario: ${row.hours}` : ""}. Precio a consultar por WhatsApp (los negocios publicados aún no cargan tarifas en la plataforma).`,
+        description: `${row.address ? `${row.address}. ` : ""}${row.hours ? `Horario: ${row.hours}. ` : ""}Precio a consultar por WhatsApp (este negocio aún no publica tarifas en la plataforma).`,
         durationMin: 30,
         priceUsd: 0,
         modality: "PICKUP",

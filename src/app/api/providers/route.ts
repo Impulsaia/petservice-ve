@@ -72,6 +72,9 @@ export async function GET(req: Request) {
         googleReviews: p.googleReviews,
         badges: p.badges,
         status: p.status,
+        avatarUrl: p.avatarUrl,
+        // "Nuevo prestador": etiqueta destacada durante 1 mes desde el registro manual
+        isNew: p.newUntil ? p.newUntil.getTime() > Date.now() : false,
         distanceKm,
         driveKm: null as number | null,
         driveMin: null as number | null,

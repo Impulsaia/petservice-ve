@@ -60,6 +60,8 @@ export async function POST(req: Request) {
   });
 
   if (role === "PROVIDER") {
+    // "Nuevo prestador": etiqueta + tarjeta destacada durante 1 mes desde el registro
+    const newUntil = new Date(Date.now() + 30 * 24 * 60 * 60_000);
     await db.provider.create({
       data: {
         userId: user.id,
@@ -71,6 +73,8 @@ export async function POST(req: Request) {
         lat,
         lng,
         radiusKm: 6,
+        source: "MANUAL", // los prestadores registrados por usuarios nunca se borran en un reseed
+        newUntil,
       },
     });
   }
@@ -88,7 +92,7 @@ export async function POST(req: Request) {
   });
 
   const res = NextResponse.json(
-    { user: { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone } },
+    { user: { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone, avatarUrl: user.avatarUrl } },
     { status: 201 }
   );
   res.headers.append("Set-Cookie", sessionCookie(createSessionToken(user.id)));

@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       include: {
         client: { select: { name: true, phone: true } },
         service: { select: { name: true, category: true, durationMin: true } },
-        pet: { select: { name: true, species: true, breed: true, size: true, notes: true } },
+        pet: { select: { name: true, species: true, breed: true, size: true, notes: true, medicalNotes: true, photoUrl: true } },
         payment: true,
         review: true,
       },
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
   const bookings = await db.booking.findMany({
     where: { clientId: auth.id },
     include: {
-      provider: { select: { id: true, businessName: true, zoneName: true, city: true, badges: true, ratingAvg: true, user: { select: { phone: true } } } },
+      provider: { select: { id: true, businessName: true, zoneName: true, city: true, badges: true, ratingAvg: true, avatarUrl: true, user: { select: { phone: true } } } },
       service: { select: { name: true, category: true, durationMin: true } },
       pet: { select: { name: true, species: true, breed: true, size: true } },
       payment: true,

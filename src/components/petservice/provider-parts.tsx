@@ -68,7 +68,7 @@ export interface ProviderBookingItem {
   notes: string | null; evidenceNote: string | null;
   client: { id: string; name: string; phone: string | null };
   service: { id: string; name: string; category: string; durationMin: number };
-  pet: { id: string; name: string; species: string; breed: string | null; size: string };
+  pet: { id: string; name: string; species: string; breed: string | null; size: string; medicalNotes?: string | null };
   payment: { id: string; method: string; status: string; reference: string | null } | null;
   review: { id: string; rating: number; comment: string } | null;
 }
@@ -987,6 +987,11 @@ export function BookingDetailDialog({ booking, onClose, busy, onAction }: {
               <div><span className="font-bold">{booking.pet.species === "GATO" ? "🐱" : "🐶"} Mascota:</span> {booking.pet.name} ({booking.pet.breed ?? "criollo"} · {booking.pet.size})</div>
               <div className="flex items-start gap-1 sm:col-span-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /><span className="font-bold">Dirección:</span> {booking.address}</div>
               <div className="flex items-center gap-1 sm:col-span-2"><Clock className="h-4 w-4 text-muted-foreground" /> Duración estimada: {booking.service.durationMin} min</div>
+              {booking.pet.medicalNotes && (
+                <div className="rounded-xl bg-teal-50 px-3 py-2 text-xs leading-relaxed text-teal-900 sm:col-span-2 dark:bg-teal-950/40 dark:text-teal-200">
+                  <span className="font-bold">🩺 Ficha médica de {booking.pet.name}:</span> {booking.pet.medicalNotes}
+                </div>
+              )}
             </div>
 
             <div className="rounded-2xl bg-secondary/50 p-3 text-sm">
@@ -1043,5 +1048,142 @@ export function BookingDetailDialog({ booking, onClose, busy, onAction }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ───────────────────────── Horario semanal del prestador (Task 29) ─────────────────────────
+
+const DAY_LABELS: Record<string, string> = {
+  "1": "Lunes", "2": "Martes", "3": "Miércoles", "4": "Jueves",
+  "5": "Viernes", "6": "Sábado", "7": "Domingo",
+};
+
+/**
+ * WeeklyScheduleEditor — el prestador define qué días y tramos horarios atiende
+ * (scheduleJson {"1":[["08:00","12:00"],...]}). Sin agenda configurada, el
+ * asistente de reservas muestra horarios tentativos 8:00–17:00.
+ */
+export function WeeklyScheduleEditor() {
+  const [schedule, setSchedule] = useState<Record<string, [string, string][]>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiGet<{ provider: { scheduleJson: string } }>("/api/bookings")
+      .then((d) => {
+        try { setSchedule(JSON.parse(d.provider.scheduleJson || "{}")); } catch { setSchedule({}); }
+        setLoading(false);
+      })
+      .catch(() => { toast.error("No se pudo cargar tu horario"); setLoading(false); });
+  }, []);
+
+  async function save(next: Record<string, [string, string][]>) {
+    setSaving(true);
+    try {
+      await apiPatch("/api/provider/schedule", { schedule: next });
+      setSchedule(next);
+      toast.success("Horario semanal actualizado ✅ Los clientes ya ven tus nuevos slots.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar el horario");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function setDay(day: string, ranges: [string, string][]) {
+    const next = { ...schedule };
+    if (ranges.length === 0) delete next[day];
+    else next[day] = ranges;
+    void save(next);
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-border/70 bg-card p-5 text-sm text-muted-foreground shadow-sm">
+        Cargando tu horario…
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
+      <h3 className="font-display font-extrabold">🕐 Mi horario semanal</h3>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Define los tramos en que aceptas reservas. Si un día está apagado, no se ofrecen slots ese día.
+      </p>
+      <div className="mt-3 space-y-2">
+        {Object.keys(DAY_LABELS).map((day) => {
+          const ranges = schedule[day] ?? [];
+          return (
+            <div key={day} className="flex flex-wrap items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2.5">
+              <label className="flex w-28 items-center gap-2 text-sm font-bold">
+                <input
+                  type="checkbox"
+                  checked={ranges.length > 0}
+                  disabled={saving}
+                  onChange={(e) => setDay(day, e.target.checked ? [["08:00", "17:00"]] : [])}
+                  className="h-4 w-4 accent-[hsl(var(--primary))]"
+                  aria-label={`Atiendes el ${DAY_LABELS[day]}`}
+                />
+                {DAY_LABELS[day]}
+              </label>
+              {ranges.length === 0 ? (
+                <span className="text-xs font-semibold text-muted-foreground">Descanso 😴</span>
+              ) : (
+                <div className="flex flex-1 flex-wrap items-center gap-2">
+                  {ranges.map(([a, b], i) => (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1">
+                      <input
+                        type="time"
+                        value={a}
+                        disabled={saving}
+                        onChange={(e) => {
+                          const next = ranges.map((r, j) => (j === i ? [e.target.value, r[1]] as [string, string] : r));
+                          setDay(day, next);
+                        }}
+                        className="rounded bg-transparent text-xs font-bold outline-none"
+                        aria-label={`Inicio del ${DAY_LABELS[day]}`}
+                      />
+                      <span className="text-xs text-muted-foreground">–</span>
+                      <input
+                        type="time"
+                        value={b}
+                        disabled={saving}
+                        onChange={(e) => {
+                          const next = ranges.map((r, j) => (j === i ? [r[0], e.target.value] as [string, string] : r));
+                          setDay(day, next);
+                        }}
+                        className="rounded bg-transparent text-xs font-bold outline-none"
+                        aria-label={`Fin del ${DAY_LABELS[day]}`}
+                      />
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setDay(day, ranges.filter((_, j) => j !== i))}
+                        className="text-xs font-bold text-rose-500 hover:text-rose-700"
+                        aria-label="Quitar tramo"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {ranges.length < 2 && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setDay(day, [...ranges, ["14:00", "18:00"]])}
+                      className="text-xs font-bold text-primary hover:underline"
+                    >
+                      + otro tramo
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {saving && <p className="mt-2 text-xs font-semibold text-primary">Guardando…</p>}
+    </div>
   );
 }

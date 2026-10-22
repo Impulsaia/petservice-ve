@@ -158,7 +158,7 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
   // Sin credenciales locales Y sin OAuth → cuenta huérfana.
   // Inactivo → el admin la desactivó: la sesión deja de ser válida al instante.
   if (!user || (!user.passwordHash && !user.googleId) || !user.active) return null;
-  return { id: user.id, email: user.email, name: user.name, phone: user.phone, role: user.role };
+  return { id: user.id, email: user.email, name: user.name, phone: user.phone, role: user.role, avatarUrl: user.avatarUrl };
 }
 
 export function jsonError(message: string, status: number, extra: Record<string, unknown> = {}) {

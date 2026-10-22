@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { PawPrint, Star, Clock, ChevronRight, Navigation, Plus, Minus, Frame, LocateFixed } from "lucide-react";
+import { PawPrint, Star, Clock, ChevronRight, Navigation, Plus, Minus, Frame, LocateFixed, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categoryMeta, CITIES, ZONES } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
@@ -28,6 +28,10 @@ export interface ProviderListItem {
   googleReviews?: number | null;
   badges: string;
   status?: string;
+  /** Foto/logotipo del negocio (data URL o https) */
+  avatarUrl?: string | null;
+  /** Registro manual reciente (< 1 mes): etiqueta "Nuevo prestador" */
+  isNew?: boolean;
   distanceKm: number | null;
   /** Conducción REAL vía OSRM (null si el router no respondió) */
   driveKm?: number | null;
@@ -56,6 +60,7 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
   const meta = categoryMeta(p.serviceCategories[0] ?? "OTROS");
   const isTop = p.badges.includes("TOP");
   const rank = providerRank(p);
+  const isNew = Boolean(p.isNew);
 
   return (
     <article
@@ -63,21 +68,35 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
       className={cn(
         "group relative cursor-pointer overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-warm transition-all duration-200 hover:-translate-y-1 hover:border-primary/40",
         rank.top && !rank.double && "border-amber-300/90 bg-gradient-to-b from-amber-50/80 to-card shadow-[0_2px_16px_rgba(245,158,11,0.18)] dark:from-amber-950/25",
-        rank.double && "border-amber-400 bg-gradient-to-b from-amber-50/90 to-card shadow-[0_2px_20px_rgba(245,158,11,0.30)] ring-2 ring-amber-400/60 dark:from-amber-950/30"
+        rank.double && "border-amber-400 bg-gradient-to-b from-amber-50/90 to-card shadow-[0_2px_20px_rgba(245,158,11,0.30)] ring-2 ring-amber-400/60 dark:from-amber-950/30",
+        // "Nuevo prestador": tarjeta en color distinto (fucsia) durante su primer mes
+        isNew && !rank.double && "border-fuchsia-300 bg-gradient-to-b from-fuchsia-50/90 to-card shadow-[0_2px_16px_rgba(217,70,239,0.18)] dark:border-fuchsia-500/50 dark:from-fuchsia-950/25",
+        isNew && rank.double && "border-fuchsia-400 ring-2 ring-fuchsia-400/60 dark:border-fuchsia-500/60"
       )}
     >
+      {isNew && (
+        <span title="Prestador registrado recientemente en PetService-VE" className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-500 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
+          <Sparkles className="h-3 w-3" /> Nuevo
+        </span>
+      )}
       {rank.double && (
-        <span className="absolute -right-9 top-3 rotate-45 bg-gradient-to-r from-amber-400 to-amber-500 px-9 py-0.5 text-[10px] font-black uppercase tracking-wide text-white shadow-sm">
+        <span className={cn(
+          "absolute -right-9 top-3 rotate-45 bg-gradient-to-r from-amber-400 to-amber-500 px-9 py-0.5 text-[10px] font-black uppercase tracking-wide text-white shadow-sm",
+          isNew && "top-9"
+        )}>
           ★ Top
         </span>
       )}
       {!rank.double && isTop && (
-        <span className="absolute -right-9 top-3 rotate-45 bg-accent px-9 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent-foreground shadow-sm">
+        <span className={cn(
+          "absolute -right-9 top-3 rotate-45 bg-accent px-9 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent-foreground shadow-sm",
+          isNew && "top-9"
+        )}>
           Top
         </span>
       )}
       <div className="flex items-start gap-3">
-        <Avatar name={p.businessName} emoji={meta.emoji} className={cn("h-14 w-14 text-xl", rank.top && "ring-2 ring-amber-400 ring-offset-2 ring-offset-card")} />
+        <Avatar name={p.businessName} emoji={meta.emoji} src={p.avatarUrl ?? undefined} className={cn("h-14 w-14 text-xl", rank.top && "ring-2 ring-amber-400 ring-offset-2 ring-offset-card", isNew && !rank.top && "ring-2 ring-fuchsia-400/70 ring-offset-2 ring-offset-card")} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h3 className="truncate font-display text-base font-extrabold">{p.businessName}</h3>
@@ -88,11 +107,6 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
             ) : (
               <span title="Pendiente de verificación" className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
                 Sin verificar
-              </span>
-            )}
-            {p.badges.includes("REAL") && (
-              <span title="Negocio real: datos verificados en fuentes públicas (Google Maps y directorios) — oct 2026" className="inline-flex items-center rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-black text-teal-800 dark:bg-teal-950/60 dark:text-teal-300">
-                Real
               </span>
             )}
           </div>
@@ -122,7 +136,7 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
               </>
             ) : null}
           </div>
-          {(rank.top || rank.psTop) && (
+          {(rank.top || rank.psTop || isNew) && (
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {rank.top && (
                 <span title={`Calificación ${rank.google.toFixed(1)}★ en su ficha pública de Google Maps`} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
@@ -137,6 +151,11 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
               {rank.double && (
                 <span title="4+★ en Google Maps Y en PetService-VE" className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
                   👑 Doble Top
+                </span>
+              )}
+              {isNew && (
+                <span title="Se registró en PetService-VE este mes" className="inline-flex items-center gap-1 rounded-full bg-fuchsia-100 px-2 py-0.5 text-[10px] font-black text-fuchsia-700 dark:bg-fuchsia-950/70 dark:text-fuchsia-300">
+                  ✨ Nuevo prestador
                 </span>
               )}
             </div>

@@ -1,9 +1,11 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { PawPrint, Scissors, Truck, House, Footprints, GraduationCap, CarTaxiFront, Sparkles, Stethoscope, MapPin, BadgeCheck, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categoryMeta, BOOKING_STATUS, PAYMENT_STATUS, PROVIDER_STATUS, NOTIF_STATUS } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
+import { toast } from "sonner";
 
 // ───────────────────────── Iconos de categoría ─────────────────────────
 
@@ -117,15 +119,120 @@ const AVATAR_COLORS = [
   "from-yellow-400 to-amber-600",
 ];
 
-export function Avatar({ name, className, emoji }: { name: string; className?: string; emoji?: string }) {
+export function Avatar({ name, className, emoji, src }: { name: string; className?: string; emoji?: string; src?: string }) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   const color = AVATAR_COLORS[hash % AVATAR_COLORS.length];
   const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const [broken, setBroken] = useState(false);
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        onError={() => setBroken(true)}
+        className={cn("inline-flex shrink-0 select-none items-center justify-center rounded-full object-cover", className ?? "h-10 w-10 text-sm")}
+      />
+    );
+  }
   return (
     <span className={cn("inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-display font-extrabold text-white select-none", color, className ?? "h-10 w-10 text-sm")}>
       {emoji ?? initials}
     </span>
+  );
+}
+
+// ───────────────────── Selector de foto (redimensiona en el cliente) ─────────────────────
+
+/**
+ * PhotoPicker — input de archivo que redimensiona la imagen en un canvas
+ * (cuadrado, ≤288px, JPEG 82%) y devuelve un data URL pequeño apto para
+ * guardarse directo en la base de datos (sin backend de archivos).
+ */
+export function PhotoPicker({ value, onChange, name, className, round = true }: {
+  value?: string | null;
+  onChange: (dataUrl: string | null) => void;
+  name: string;
+  className?: string;
+  round?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith("image/")) { toast.error("Selecciona un archivo de imagen"); return; }
+    if (file.size > 12 * 1024 * 1024) { toast.error("La imagen pesa más de 12 MB"); return; }
+    setBusy(true);
+    try {
+      const bitmap = await createImageBitmap(file);
+      const size = Math.min(bitmap.width, bitmap.height);
+      const target = Math.min(288, size);
+      const canvas = document.createElement("canvas");
+      canvas.width = target;
+      canvas.height = target;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas");
+      ctx.drawImage(bitmap, (bitmap.width - size) / 2, (bitmap.height - size) / 2, size, size, 0, 0, target, target);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      onChange(dataUrl);
+    } catch {
+      toast.error("No se pudo procesar la imagen");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className={cn("flex items-center gap-3", className)}>
+      <button
+        type="button"
+        aria-label="Cambiar foto"
+        onClick={() => inputRef.current?.click()}
+        className={cn(
+          "group relative flex h-20 w-20 items-center justify-center overflow-hidden border-2 border-dashed border-border bg-muted/50 transition-colors hover:border-primary/60 hover:bg-muted",
+          round ? "rounded-full" : "rounded-2xl"
+        )}
+      >
+        {value ? (
+          <img src={value} alt={name} className="h-full w-full object-cover" />
+        ) : (
+          <span className="text-2xl">📷</span>
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[10px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100">
+          {busy ? "…" : "Cambiar"}
+        </span>
+      </button>
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="rounded-full bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground transition-colors hover:bg-secondary/70"
+        >
+          {value ? "Cambiar foto" : "Subir foto"}
+        </button>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-left text-xs font-semibold text-muted-foreground hover:text-destructive"
+          >
+            Quitar foto
+          </button>
+        )}
+        <span className="max-w-40 text-[10px] leading-tight text-muted-foreground">JPG/PNG — se recorta y comprime automáticamente</span>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+        }}
+      />
+    </div>
   );
 }
 
