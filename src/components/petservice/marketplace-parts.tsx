@@ -971,7 +971,7 @@ export function MapPanel({
           <Navigation className="h-3 w-3 shrink-0 text-accent-foreground" /> <span className="truncate">{loc.label}</span>
           {sector && (
             <span className="hidden shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-black text-primary sm:inline-flex">
-              🏘️ {sector.name}
+              🏘️ {sector.name}{sector.zone ? ` · Pq. ${sector.zone}` : ""}
             </span>
           )}
         </span>

@@ -25,7 +25,7 @@ import {
 import { apiGet, apiPost, apiPatch } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
 import { fmtUsd, fmtBs, fmtDate, fmtDateTime, fmtRelative } from "@/lib/petservice/format";
-import { CATEGORIES, categoryMeta, BOOKING_STATUS } from "@/lib/petservice/constants";
+import { CATEGORIES, categoryMeta, BOOKING_STATUS, parroquiasFor } from "@/lib/petservice/constants";
 import { Avatar, BookingStatusBadge, PaymentStatusBadge, CategoryIcon, EmptyState } from "@/components/petservice/shared";
 
 // ───────────────────────── Helpers de red / hooks ─────────────────────────
@@ -1125,16 +1125,11 @@ interface CityRow {
   id: string; name: string; state: string; lat: number; lng: number; active: boolean; providerCount: number;
 }
 
-const ZONE_CHIP: Record<string, string> = {
-  CENTRO: "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300",
-  NORTE: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
-  SUR: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
-  ESTE: "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300",
-  OESTE: "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300",
-};
-const ZONES = ["CENTRO", "NORTE", "SUR", "ESTE", "OESTE"];
+const ZONE_CHIP = "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300";
+/** sentinel del dropdown: parroquia escrita a mano (ciudades sin catálogo oficial aún) */
+const ZONA_OTRA = "__OTRA__";
 
-const emptySectorForm = { cityName: "", name: "", zone: "CENTRO", lat: "", lng: "" };
+const emptySectorForm = { cityName: "", name: "", zone: "", lat: "", lng: "" };
 
 export function SectorsSection() {
   const { bumpData } = useAppStore();
@@ -1149,6 +1144,7 @@ export function SectorsSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SectorRow | null>(null);
   const [form, setForm] = useState(emptySectorForm);
+  const [customZone, setCustomZone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SectorRow | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -1180,6 +1176,13 @@ export function SectorsSection() {
     );
   }, [sectors, city, zone, q]);
 
+  /** parroquias presentes entre los sectores cargados (para el filtro) */
+  const parroquiaOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of sectors) if (s.zone?.trim()) set.add(s.zone.trim());
+    return [...set].sort((a, b) => a.localeCompare(b, "es")).map((z) => ({ value: z, label: `Pq. ${z}` }));
+  }, [sectors]);
+
   // Agrupado por ciudad para el listado
   const grouped = useMemo(() => {
     const map = new Map<string, SectorRow[]>();
@@ -1193,12 +1196,17 @@ export function SectorsSection() {
 
   function openCreate(preCity?: string) {
     setEditing(null);
-    setForm({ ...emptySectorForm, cityName: preCity ?? city ?? "" });
+    setCustomZone(false);
+    const cityName = preCity ?? city ?? "";
+    const pq = parroquiasFor(cityName);
+    setForm({ ...emptySectorForm, cityName, zone: pq[0] ?? "" });
     setDialogOpen(true);
   }
 
   function openEdit(s: SectorRow) {
     setEditing(s);
+    const oficial = parroquiasFor(s.cityName).includes(s.zone);
+    setCustomZone(Boolean(s.zone) && !oficial);
     setForm({ cityName: s.cityName, name: s.name, zone: s.zone, lat: s.lat === null ? "" : String(s.lat), lng: s.lng === null ? "" : String(s.lng) });
     setDialogOpen(true);
   }
@@ -1206,12 +1214,13 @@ export function SectorsSection() {
   async function save() {
     if (form.name.trim().length < 2) return toast.error("El nombre debe tener al menos 2 caracteres");
     if (!editing && !form.cityName) return toast.error("Selecciona una ciudad");
+    if (!form.zone.trim()) return toast.error("Selecciona o escribe la parroquia del sector");
     setSaving(true);
     try {
       if (editing) {
         await apiPatch(`/api/admin/sectors/${editing.id}`, {
           name: form.name.trim(),
-          zone: form.zone,
+          zone: form.zone.trim(),
           lat: form.lat.trim() === "" ? null : Number(form.lat),
           lng: form.lng.trim() === "" ? null : Number(form.lng),
         });
@@ -1220,7 +1229,7 @@ export function SectorsSection() {
         await apiPost("/api/admin/sectors", {
           cityName: form.cityName,
           name: form.name.trim(),
-          zone: form.zone,
+          zone: form.zone.trim(),
           lat: form.lat.trim() === "" ? undefined : Number(form.lat),
           lng: form.lng.trim() === "" ? undefined : Number(form.lng),
         });
@@ -1271,7 +1280,7 @@ export function SectorsSection() {
 
   const chips = [
     ...(city ? [{ label: city, onClear: () => setCity("") }] : []),
-    ...(zone ? [{ label: `Zona ${zone}`, onClear: () => setZone("") }] : []),
+    ...(zone ? [{ label: `Pq. ${zone}`, onClear: () => setZone("") }] : []),
     ...(q.trim() ? [{ label: `"${q.trim()}"`, onClear: () => setQ("") }] : []),
   ];
 
@@ -1299,22 +1308,7 @@ export function SectorsSection() {
       >
         <SearchInput value={q} onChange={setQ} placeholder="Buscar sector por nombre…" className="w-full sm:w-60" />
         <FilterSelect value={city} onChange={setCity} placeholder="Todas las ciudades" options={cities.map((c) => ({ value: c.name, label: `${c.name} (${c.providerCount})` }))} className="sm:w-52" />
-        {/* Chips por zona */}
-        <div className="flex flex-wrap gap-1.5">
-          {ZONES.map((z) => (
-            <button
-              key={z}
-              type="button"
-              onClick={() => setZone(zone === z ? "" : z)}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] font-black transition-all",
-                zone === z ? ZONE_CHIP[z] + " ring-2 ring-offset-1 ring-current" : cn(ZONE_CHIP[z], "opacity-50 hover:opacity-100")
-              )}
-            >
-              {z} ({filteredByZone(z)})
-            </button>
-          ))}
-        </div>
+        <FilterSelect value={zone} onChange={setZone} placeholder="Todas las parroquias" options={parroquiaOptions} className="sm:w-44" />
       </FilterBar>
 
       {loading ? (
@@ -1345,7 +1339,7 @@ export function SectorsSection() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-extrabold">{s.name}</span>
-                          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide", ZONE_CHIP[s.zone] ?? "bg-muted text-muted-foreground")}>{s.zone}</span>
+                          {s.zone && <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide", ZONE_CHIP)}>Pq. {s.zone}</span>}
                           {!s.active && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">INACTIVO</span>}
                         </div>
                         <div className="font-mono text-[11px] text-muted-foreground">
@@ -1383,7 +1377,7 @@ export function SectorsSection() {
               {editing ? (
                 <div className="mt-1 rounded-xl bg-secondary/60 px-3 py-2 text-sm font-bold">📍 {editing.cityName}</div>
               ) : (
-                <Select value={form.cityName || undefined} onValueChange={(v) => setForm({ ...form, cityName: v })}>
+                <Select value={form.cityName || undefined} onValueChange={(v) => setForm({ ...form, cityName: v, zone: parroquiasFor(v)[0] ?? "" })}>
                   <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="Selecciona la ciudad…" /></SelectTrigger>
                   <SelectContent className="max-h-72">
                     {cities.map((c) => (
@@ -1400,13 +1394,45 @@ export function SectorsSection() {
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ej: Villa Alias" className="mt-1 rounded-xl" maxLength={60} />
             </div>
             <div>
-              <Label className="text-xs font-bold">Zona cardinal</Label>
-              <Select value={form.zone} onValueChange={(v) => setForm({ ...form, zone: v })}>
-                <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ZONES.map((z) => <SelectItem key={z} value={z} className="text-xs">{z}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-bold">Parroquia donde queda el sector</Label>
+              {!customZone ? (
+                <Select
+                  value={form.zone || undefined}
+                  onValueChange={(v) => {
+                    if (v === ZONA_OTRA) {
+                      setCustomZone(true);
+                      setForm({ ...form, zone: "" });
+                    } else {
+                      setCustomZone(false);
+                      setForm({ ...form, zone: v });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="Selecciona la parroquia…" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {parroquiasFor(form.cityName).map((z) => (
+                      <SelectItem key={z} value={z} className="text-xs">{z}</SelectItem>
+                    ))}
+                    <SelectItem value={ZONA_OTRA} className="text-xs">✏️ Otra (escribir a mano)</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="mt-1 flex gap-2">
+                  <Input
+                    value={form.zone}
+                    onChange={(e) => setForm({ ...form, zone: e.target.value })}
+                    placeholder="Ej: Libertad"
+                    className="rounded-xl"
+                    maxLength={60}
+                  />
+                  <Button type="button" variant="outline" onClick={() => { setCustomZone(false); setForm({ ...form, zone: parroquiasFor(form.cityName)[0] ?? "" }); }} className="shrink-0 rounded-xl font-bold">
+                    Catálogo
+                  </Button>
+                </div>
+              )}
+              {form.cityName && parroquiasFor(form.cityName).length > 0 && !customZone && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Parroquias oficiales de {form.cityName}. Si tu sector pertenece a otra, usa «Otra».</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1450,10 +1476,6 @@ export function SectorsSection() {
       </AlertDialog>
     </div>
   );
-
-  function filteredByZone(z: string) {
-    return sectors.filter((s) => (!city || s.cityName === city) && s.zone === z).length;
-  }
 }
 
 // ─────────────────────────════════ FIRULAIS IA ══════════────────────────────────

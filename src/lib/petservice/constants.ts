@@ -103,6 +103,36 @@ export const ZONES: Zone[] = [
 
 export const DEMO_LOCATIONS = ZONES;
 
+// ─────────────── Parroquias oficiales por ciudad ───────────────
+// Fuente: división político-territorial de Venezuela (INE) + alcaldías.
+// - Municipio Caroní (11 parroquias): Cachamay, Chirica, Dalla Costa, Once de Abril,
+//   Simón Bolívar, Unare, Universidad, Vista al Sol, Pozo Verde, Yocoima, Cinco de Julio.
+//   Orilla norte (Puerto Ordaz): Unare, Cachamay, Universidad + Pozo Verde (rural oeste).
+//   Orilla sur (San Félix): Simón Bolívar, Once de Abril, Dalla Costa, Cinco de Julio,
+//   Chirica, Vista al Sol, Yocoima.
+// - Municipio Heres / Angostura del Orinoco (9): Catedral, Orinoco, Vista Hermosa,
+//   La Sabanita, Marhuanta, Agua Salada, Zea, José Antonio Páez, Panapana.
+// - Municipio Piar (3): Upata, Pedro Cova (El Manteco), Andrés Eloy Blanco (El Pao).
+// Las demás ciudades del catálogo nacional no tienen catálogo aún: el admin puede
+// escribir la parroquia libremente en el editor de sectores.
+export const PARROQUIAS: Record<string, string[]> = {
+  "Puerto Ordaz": ["Unare", "Cachamay", "Universidad", "Pozo Verde"],
+  "San Félix": ["Simón Bolívar", "Once de Abril", "Dalla Costa", "Cinco de Julio", "Chirica", "Vista al Sol", "Yocoima"],
+  "Ciudad Bolívar": ["Catedral", "Orinoco", "Vista Hermosa", "La Sabanita", "Marhuanta", "Agua Salada", "Zea", "José Antonio Páez", "Panapana"],
+  Upata: ["Upata", "Pedro Cova", "Andrés Eloy Blanco"],
+};
+
+/** Parroquias oficiales de una ciudad (puede ser [] para ciudades sin catálogo). */
+export function parroquiasFor(city: string): string[] {
+  return PARROQUIAS[city] ?? [];
+}
+
+/** Etiqueta visible de la parroquia de un sector: "Pq. Unare". */
+export function parroquiaLabel(zone: string | null | undefined): string | null {
+  const z = (zone ?? "").trim();
+  return z ? `Pq. ${z}` : null;
+}
+
 // ─────────────── Cuentas demo (login de prueba) ───────────────
 
 export interface DemoAccount {

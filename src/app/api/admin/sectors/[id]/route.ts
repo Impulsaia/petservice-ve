@@ -2,10 +2,9 @@ import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 
-const ZONES = ["CENTRO", "NORTE", "SUR", "ESTE", "OESTE"];
-
 /**
- * PATCH /api/admin/sectors/[id] — edita un sector (nombre, zona, coords, active).
+ * PATCH /api/admin/sectors/[id] — edita un sector (nombre, parroquia, coords, active).
+ * `zone` guarda la PARROQUIA del sector (texto libre validado por la UI).
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
@@ -32,8 +31,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.name = name;
   }
   if (body.zone !== undefined) {
-    const zone = cleanText(body.zone, 10).toUpperCase();
-    if (!ZONES.includes(zone)) return jsonError(`Zone debe ser: ${ZONES.join(", ")}`, 400);
+    const zone = cleanText(body.zone, 60);
+    if (!zone) return jsonError("La parroquia (zone) no puede quedar vacía", 400);
     data.zone = zone;
   }
   if (body.lat !== undefined) {

@@ -16,8 +16,10 @@ import { DEMO_DB_BASE64, DEMO_DB_HASH } from './demoDb'
  *  - Catálogo importado (OSM/BOLIVAR/ZONA): se actualizan solo campos
  *    geográficos/ comerciales, nunca estado (status/badges/avatar) que pudo
  *    cambiar en producción.
- *  - Servicios/sectores/FAQ: solo se INSERTAN si faltan (las ediciones del
+ *  - Servicios/FAQ: solo se INSERTAN si faltan (las ediciones del
  *    admin en producción ganan).
+ *  - Sectores: se insertan si faltan y se refresca su metadata geográfica
+ *    (ciudad/parroquia/coords); nombre y estado activo los manda producción.
  */
 
 const SEED_PATH = '/tmp/petservice-seed.db'
@@ -76,10 +78,18 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
       })
     }
 
-    // 3) Sectores: solo insertar los que faltan
+    // 3) Sectores: insertar los que faltan + refrescar la metadata geográfica
+    //    (ciudad/parroquia/coords) de los existentes. `name` y `active` se
+    //    respetan tal cual los dejó el admin en producción.
     const mainSectorIds = new Set((await db0.sector.findMany({ select: { id: true } })).map((s) => s.id))
     for (const s of await seed.sector.findMany()) {
-      if (mainSectorIds.has(s.id)) continue
+      if (mainSectorIds.has(s.id)) {
+        await db0.sector.update({
+          where: { id: s.id },
+          data: { cityName: s.cityName, zone: s.zone, lat: s.lat, lng: s.lng },
+        })
+        continue
+      }
       await db0.sector.create({
         data: { id: s.id, cityName: s.cityName, name: s.name, zone: s.zone, lat: s.lat, lng: s.lng, active: s.active },
       })

@@ -50,6 +50,11 @@ export function MarketplaceView() {
   const [providers, setProviders] = useState<ProviderListItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [qInput, setQInput] = useState(filters.q);
+  // El filtro textual es la fuente de verdad: si un botón lo limpia, el input
+  // también se limpia (y viceversa al enviar el formulario).
+  useEffect(() => {
+    setQInput(filters.q);
+  }, [filters.q]);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const [heroOk, setHeroOk] = useState(true);
   const [aiThinking, setAiThinking] = useState(false);
@@ -121,7 +126,8 @@ export function MarketplaceView() {
   function chooseCity(c: CityInfo) {
     setCitiesOpen(false);
     setCityQuery("");
-    setFilters({ zone: null });
+    // Nueva búsqueda desde el botón: se limpia el filtro textual anterior
+    setFilters({ zone: null, q: "" });
     if (c.providerCount > 0) {
       setSelectedSector(null);
       setCity(c.name, centerForCity(c.name, c));
@@ -136,11 +142,14 @@ export function MarketplaceView() {
   function selectSector(s: SectorInfo) {
     setSelectedSector(s);
     setLoc({ label: s.name, lat: s.lat, lng: s.lng });
-    toast.success(`🏘️ Buscando en ${s.name}${s.zone ? ` · ${s.zone}` : ""}`);
+    // Nueva búsqueda desde el botón: se limpia el filtro textual anterior
+    setFilters({ q: "" });
+    toast.success(`🏘️ Buscando en ${s.name}${s.zone ? ` · Pq. ${s.zone}` : ""}`);
   }
 
   function clearSector() {
     setSelectedSector(null);
+    setFilters({ q: "" });
     const center = centerForCity(city, currentCityInfo);
     if (center) setCity(city, center);
   }
@@ -155,7 +164,7 @@ export function MarketplaceView() {
     // Preferimos Puerto Ordaz (sede principal); si no, la primera activa
     const target = active?.find((c) => c.name === "Puerto Ordaz")?.name ?? active?.[0]?.name ?? "Puerto Ordaz";
     setSelectedSector(null);
-    setFilters({ zone: null });
+    setFilters({ zone: null, q: "" });
     setCity(target, centerForCity(target, active?.find((c) => c.name === target) ?? undefined));
   }
 
@@ -199,6 +208,18 @@ export function MarketplaceView() {
     const avg = all.length ? all.reduce((a, p) => a + p.ratingAvg, 0) / all.length : 0;
     return { providers: all.length, services, avg };
   }, [providers]);
+
+  /** Sectores agrupados por su PARROQUIA (división político-territorial real). */
+  const sectorsByParroquia = useMemo(() => {
+    const map = new Map<string, SectorInfo[]>();
+    for (const s of sectors) {
+      const pq = (s.zone ?? "").trim() || "Otros sectores";
+      const arr = map.get(pq);
+      if (arr) arr.push(s);
+      else map.set(pq, [s]);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], "es"));
+  }, [sectors]);
 
   function submitSearch(e?: React.FormEvent) {
     e?.preventDefault();
@@ -255,6 +276,7 @@ export function MarketplaceView() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLoc({ label: "Mi ubicación (GPS)", lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setFilters({ q: "" }); // búsqueda desde el botón GPS: limpia el filtro anterior
         toast.success("📍 Ubicación GPS detectada");
       },
       () => toast.info("Sin permiso de GPS — usa el selector de zona para buscar"),
@@ -415,9 +437,9 @@ export function MarketplaceView() {
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-[min(92vw,300px)] rounded-2xl p-0 shadow-xl" role="dialog" aria-label="Elegir sector">
                   <p className="border-b border-border/60 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                    Sectores de {city}
+                    Sectores por parroquia · {city}
                   </p>
-                  <div className="scroll-slim max-h-[260px] overflow-y-auto p-2">
+                  <div className="scroll-slim max-h-[300px] overflow-y-auto p-2">
                     <button
                       onClick={() => {
                         clearSector();
@@ -432,28 +454,31 @@ export function MarketplaceView() {
                       </span>
                       {!selectedSector && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
                     </button>
-                    {sectors.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          selectSector(s);
-                          setSectorsOpen(false);
-                        }}
-                        title={`Zona ${s.zone ?? "—"} · ${s.cityName}`}
-                        className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-secondary"
-                        aria-label={`Sector ${s.name}${s.zone ? `, zona ${s.zone}` : ""}`}
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="shrink-0">🏘️</span>
-                          <span className="truncate text-sm font-bold">{s.name}</span>
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                          {s.zone && (
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">Zona {s.zone}</span>
-                          )}
-                          {selectedSector?.id === s.id && <Check className="h-3.5 w-3.5 text-emerald-600" />}
-                        </span>
-                      </button>
+                    {/* Agrupados por su parroquia real (división político-territorial) */}
+                    {sectorsByParroquia.map(([parroquia, list]) => (
+                      <div key={parroquia}>
+                        <div className="px-2 pb-0.5 pt-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                          Pq. {parroquia}
+                        </div>
+                        {list.map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => {
+                              selectSector(s);
+                              setSectorsOpen(false);
+                            }}
+                            title={`Parroquia ${s.zone ?? "—"} · ${s.cityName}`}
+                            className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-secondary"
+                            aria-label={`Sector ${s.name}, parroquia ${s.zone ?? "—"}`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0">🏘️</span>
+                              <span className="truncate text-sm font-bold">{s.name}</span>
+                            </span>
+                            {selectedSector?.id === s.id && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
+                          </button>
+                        ))}
+                      </div>
                     ))}
                   </div>
                 </PopoverContent>
@@ -495,7 +520,7 @@ export function MarketplaceView() {
       <section aria-label="Categorías de servicios">
         <div className="scroll-slim -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1">
           <button
-            onClick={() => setFilters({ category: null })}
+            onClick={() => setFilters({ category: null, q: "" })}
             className={cn(
               "flex shrink-0 flex-col items-center gap-1 rounded-2xl border px-4 py-3 transition-all",
               !filters.category
@@ -509,7 +534,7 @@ export function MarketplaceView() {
           {CATEGORIES.map((c) => (
             <button
               key={c.key}
-              onClick={() => setFilters({ category: filters.category === c.key ? null : (c.key as CategoryKey) })}
+              onClick={() => setFilters({ category: filters.category === c.key ? null : (c.key as CategoryKey), q: "" })}
               className={cn(
                 "flex shrink-0 flex-col items-center gap-1 rounded-2xl border px-4 py-3 transition-all",
                 filters.category === c.key

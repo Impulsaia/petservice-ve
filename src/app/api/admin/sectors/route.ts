@@ -2,8 +2,6 @@ import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
 
-const ZONES = ["CENTRO", "NORTE", "SUR", "ESTE", "OESTE"];
-
 /**
  * GET /api/admin/sectors?city=… — sectores (admin ve todo, con inactivos).
  * Sin ?city devuelve todas las ciudades agrupadas.
@@ -25,6 +23,8 @@ export async function GET(req: Request) {
 /**
  * POST /api/admin/sectors — crea un sector en una ciudad existente del catálogo.
  * Body: { cityName, name, zone?, lat?, lng? }
+ * `zone` guarda la PARROQUIA donde queda el sector (texto libre validado por la
+ * UI contra el catálogo de parroquias oficiales de cada ciudad).
  */
 export async function POST(req: Request) {
   after(() => flushDb()); // persiste cambios en el blob compartido (Vercel)
@@ -44,8 +44,8 @@ export async function POST(req: Request) {
   const city = await db.city.findFirst({ where: { name: cityName } });
   if (!city) return jsonError("La ciudad no existe en el catálogo (créala primero o usa un nombre exacto de City)", 404);
 
-  const zone = body.zone ? cleanText(body.zone, 10).toUpperCase() : "CENTRO";
-  if (!ZONES.includes(zone)) return jsonError(`Zone debe ser: ${ZONES.join(", ")}`, 400);
+  const zone = body.zone ? cleanText(body.zone, 60) : "";
+  if (!zone) return jsonError("La parroquia (zone) es obligatoria", 400);
 
   let lat: number | null = null;
   let lng: number | null = null;
