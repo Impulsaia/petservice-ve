@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useAppStore, type View } from "@/lib/petservice/store";
 import { apiGet, apiPost } from "@/lib/petservice/api";
+import { SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_WA, type CategoryKey } from "@/lib/petservice/constants";
 
 const NAV: { key: View; label: string; short: string; icon: React.ReactNode; role: string }[] = [
   { key: "home", label: "Explorar", short: "Explorar", icon: <Compass className="h-5 w-5" />, role: "CLIENT" },
@@ -19,8 +20,22 @@ const NAV: { key: View; label: string; short: string; icon: React.ReactNode; rol
 const ROLE_LABEL: Record<string, string> = { CLIENT: "Cliente", PROVIDER: "Prestador", ADMIN: "Admin" };
 const ROLE_HOME: Record<string, View> = { CLIENT: "home", PROVIDER: "providerDash", ADMIN: "admin" };
 
+/** Servicios del footer: cada fila es un enlace que lanza la búsqueda por categoría */
+const FOOTER_SERVICES: { label: string; category: CategoryKey }[] = [
+  { label: "✂️ Peluquería canina y felina", category: "GROOMING" },
+  { label: "🩺 Consultas veterinarias a domicilio", category: "VET" },
+  { label: "🛵 Delivery de alimentos y medicinas", category: "DELIVERY" },
+  { label: "🏡 Pet sitting · 🦮 Paseos", category: "PET_SITTING" },
+  { label: "🎓 Adiestramiento · 🚕 Pet taxi · 🛁 Spa móvil", category: "TRAINING" },
+  { label: "🏕️ Refugios y rescates de mascotas", category: "REFUGIO" },
+  { label: "❤️ Adopción responsable de mascotas", category: "ADOPCION" },
+];
+
+/** Cache simple de ciudades (el listado cambia poco; evita refetch por cambio de ciudad) */
+let citiesCache: { name: string; state: string }[] | null = null;
+
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { view, setView, backToHome, settings, setSettings, user, setUser, authLoaded, setAuthLoaded } = useAppStore();
+  const { view, setView, backToHome, settings, setSettings, user, setUser, authLoaded, setAuthLoaded, city, setFilters } = useAppStore();
   const { resolvedTheme, setTheme } = useTheme();
   // El tema solo se conoce tras montar (next-themes): evita mismatch de hidratación
   // renderizando el icono/aria-label por defecto en servidor y primer render del cliente.
@@ -61,6 +76,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [setView]);
 
+  /** Estado (entidad federal) de la ciudad activa — para el breadcrumb del header */
+  const [cityState, setCityState] = useState<string | null>(null);
+  const [totalCities, setTotalCities] = useState<number>(29);
+
+  // Breadcrumb dinámico: "Estado · Ciudad · + N ciudades" según donde navega el usuario
+  useEffect(() => {
+    let alive = true;
+    const apply = (list: { name: string; state: string }[]) => {
+      if (!alive) return;
+      setCityState(list.find((c) => c.name === city)?.state ?? null);
+      setTotalCities(list.length || 29);
+    };
+    if (citiesCache) {
+      apply(citiesCache);
+      return;
+    }
+    apiGet<{ cities: { name: string; state: string }[]; total: number }>("/api/cities")
+      .then((d) => {
+        citiesCache = d.cities;
+        apply(d.cities);
+      })
+      .catch(() => {}); // sin bloquear el header si falla
+    return () => {
+      alive = false;
+    };
+  }, [city]);
+
+  /** Footer: lanzar búsqueda por categoría desde un enlace de servicio */
+  function searchByCategory(category: CategoryKey) {
+    setFilters({ category, q: "", zone: null });
+    backToHome();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function logout() {
     try {
       await apiPost("/api/auth/logout", {});
@@ -98,7 +147,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="font-display text-lg font-black tracking-tight">
                 PetService <span className="text-accent-foreground rounded-md bg-accent px-1 py-0.5 text-xs font-black">VE</span>
               </span>
-              <span className="text-[11px] text-muted-foreground">Venezuela 🇻🇪 · Guayana · Orinoco · +29 ciudades 🐾</span>
+              <span className="text-[11px] text-muted-foreground">
+                Venezuela 🇻🇪{cityState ? ` · ${cityState} · ${city}` : ""} · + {totalCities} ciudades 🐾
+              </span>
             </span>
           </button>
 
@@ -210,18 +261,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="text-sm">
             <h3 className="mb-2 font-display font-bold">Servicios</h3>
-            <ul className="space-y-1 text-muted-foreground">
-              <li>✂️ Peluquería canina y felina</li>
-              <li>🩺 Consultas veterinarias a domicilio</li>
-              <li>🛵 Delivery de alimentos y medicinas</li>
-              <li>🏡 Pet sitting · 🦮 Paseos</li>
-              <li>🎓 Adiestramiento · 🚕 Pet taxi · 🛁 Spa móvil</li>
+            <ul className="space-y-1">
+              {FOOTER_SERVICES.map((s) => (
+                <li key={s.category}>
+                  <button
+                    onClick={() => searchByCategory(s.category)}
+                    className="text-left text-muted-foreground transition-colors hover:text-foreground hover:underline decoration-dotted underline-offset-2"
+                  >
+                    {s.label}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
           <div className="text-sm">
             <h3 className="mb-2 font-display font-bold">Soporte por WhatsApp</h3>
             <p className="text-muted-foreground">
-              +58 412 555 0000<br />
+              <a href={`https://wa.me/${SUPPORT_WHATSAPP_WA}`} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-dotted underline-offset-2 hover:text-foreground">
+                {SUPPORT_WHATSAPP}
+              </a>
+              <br />
               Lunes a sábado, 8:00 a.m. – 6:00 p.m.
             </p>
             <p className="mt-3 text-xs text-muted-foreground/70">

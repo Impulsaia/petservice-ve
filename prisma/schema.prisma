@@ -79,6 +79,10 @@ model Provider {
   // null = el prestador usa solo el wizard estándar.
   bookingFlowJson String?
 
+  // Auto-suspensión por queja (reseña ≤ 2★ tras servicio completado):
+  // nota legible con el motivo; el admin la limpia al reactivar (status → VERIFIED).
+  suspensionNote String?
+
   services Service[]
   bookings Booking[]
   reviews  Review[]
@@ -90,7 +94,7 @@ model Service {
   id          String @id @default(cuid())
   providerId  String
   provider    Provider @relation(fields: [providerId], references: [id])
-  // GROOMING | DELIVERY | PET_SITTING | DOG_WALKING | TRAINING | PET_TAXI | SPA_MOVIL | VET
+  // GROOMING | DELIVERY | PET_SITTING | DOG_WALKING | TRAINING | PET_TAXI | SPA_MOVIL | VET | REFUGIO | ADOPCION
   category    String
   name        String
   description String

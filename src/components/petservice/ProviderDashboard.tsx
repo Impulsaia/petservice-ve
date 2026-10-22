@@ -50,6 +50,7 @@ import { AccountProfileEditor, BusinessProfileEditor } from "@/components/petser
 interface ProviderInfo {
   id: string; businessName: string; status: string; ratingAvg: number; ratingCount: number; zoneName: string; city: string;
   avatarUrl?: string | null;
+  suspensionNote?: string | null;
 }
 interface ReviewItem {
   id: string; authorName: string; rating: number; comment: string; tags: string; response: string | null; createdAt: string;
@@ -490,6 +491,17 @@ export function ProviderDashboard() {
           <span className="text-xs font-bold text-muted-foreground">· reputación</span>
         </div>
       </div>
+
+      {/* Auto-suspensión por queja: el prestador ve el motivo y qué hacer */}
+      {provider?.status === "SUSPENDED" && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/40">
+          <p className="text-sm font-black text-rose-700 dark:text-rose-300">⛔ Tu ficha está suspendida de las búsquedas</p>
+          <p className="mt-1 text-xs leading-relaxed text-rose-700/90 dark:text-rose-300/90">
+            {provider.suspensionNote ?? "Recibimos una queja de un cliente y tu ficha quedó fuera de las búsquedas mientras se aclara."}{" "}
+            Escribe a nuestro soporte WhatsApp +58 424 9526402 para resolverlo: en cuanto el cliente quede satisfecho, el admin reactiva tu cuenta y vuelves a aparecer.
+          </p>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-secondary p-1.5">

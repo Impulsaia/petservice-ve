@@ -10,7 +10,9 @@ export type CategoryKey =
   | "TRAINING"
   | "PET_TAXI"
   | "SPA_MOVIL"
-  | "VET";
+  | "VET"
+  | "REFUGIO"
+  | "ADOPCION";
 
 export interface CategoryMeta {
   key: CategoryKey;
@@ -32,7 +34,14 @@ export const CATEGORIES: CategoryMeta[] = [
   { key: "PET_TAXI", label: "Pet Taxi", tagline: "Transporte seguro", emoji: "🚕", chip: "bg-yellow-500 text-white", soft: "bg-yellow-100 dark:bg-yellow-900/40", iconColor: "text-yellow-600 dark:text-yellow-300" },
   { key: "SPA_MOVIL", label: "Spa Móvil", tagline: "Baño en la puerta", emoji: "🛁", chip: "bg-fuchsia-500 text-white", soft: "bg-fuchsia-100 dark:bg-fuchsia-900/40", iconColor: "text-fuchsia-600 dark:text-fuchsia-300" },
   { key: "VET", label: "Veterinaria", tagline: "Consulta, vacunas y más", emoji: "🩺", chip: "bg-violet-600 text-white", soft: "bg-violet-100 dark:bg-violet-900/40", iconColor: "text-violet-700 dark:text-violet-300" },
+  { key: "REFUGIO", label: "Refugios", tagline: "Refugios y rescates de mascotas", emoji: "🏕️", chip: "bg-stone-600 text-white", soft: "bg-stone-100 dark:bg-stone-900/40", iconColor: "text-stone-700 dark:text-stone-300" },
+  { key: "ADOPCION", label: "Adopción", tagline: "Adopta, no compres", emoji: "❤️", chip: "bg-pink-500 text-white", soft: "bg-pink-100 dark:bg-pink-900/40", iconColor: "text-pink-600 dark:text-pink-300" },
 ];
+
+/** WhatsApp oficial de soporte PetService VE (único punto de verdad) */
+export const SUPPORT_WHATSAPP = "+58 424 9526402";
+/** Digits-only para enlaces wa.me: 584249526402 */
+export const SUPPORT_WHATSAPP_WA = "584249526402";
 
 export function categoryMeta(key: string): CategoryMeta {
   return CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[0];

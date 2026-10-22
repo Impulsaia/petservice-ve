@@ -554,8 +554,17 @@ function ReviewDialog({ booking, onClose, onDone }: { booking: BookingItem | nul
     if (!booking) return;
     setSubmitting(true);
     try {
-      await apiPost("/api/reviews", { bookingId: booking.id, rating, comment, tags });
-      toast.success("¡Gracias por tu reseña! ⭐");
+      const d = await apiPost<{ providerSuspended?: boolean }>("/api/reviews", { bookingId: booking.id, rating, comment, tags });
+      if (rating <= 2) {
+        toast(
+          d.providerSuspended
+            ? "🚨 Queja registrada. El prestador quedó FUERA de las búsquedas hasta que el equipo aclare la situación contigo."
+            : "🚨 Queja registrada. Gracias por avisarnos, revisaremos el caso.",
+          { duration: 7000 }
+        );
+      } else {
+        toast.success("¡Gracias por tu reseña! ⭐");
+      }
       onDone();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error enviando reseña");
@@ -611,6 +620,11 @@ function ReviewDialog({ booking, onClose, onDone }: { booking: BookingItem | nul
           <div>
             <Label className="text-xs font-bold">Tu comentario</Label>
             <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} className="mt-1 rounded-2xl" placeholder="Cuéntale a la comunidad cómo fue la experiencia…" />
+            {rating <= 2 && (
+              <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-[11px] font-semibold leading-snug text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                🚨 Con 2★ o menos registramos una QUEJA: el prestador se suspende automáticamente de las búsquedas hasta que nuestro equipo aclare lo sucedido contigo y quedes satisfecho.
+              </p>
+            )}
           </div>
 
           <Button onClick={submit} disabled={submitting || comment.trim().length < 5} className="w-full rounded-xl bg-primary font-bold">

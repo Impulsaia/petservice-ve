@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     where: { id: bookingId },
     include: {
       provider: { select: { id: true, businessName: true } },
+      service: { select: { name: true } },
       review: true,
     },
   });
@@ -82,7 +83,50 @@ export async function POST(req: Request) {
     },
   });
 
-  return NextResponse.json({ review }, { status: 201 });
+  // ── Queja automática (≤ 2★): auto-suspensión del prestador en búsquedas ──
+  // Mecanismo simple y automático: solo clientes con servicio COMPLETADO y
+  // pagado pueden reseñar (1 reseña por reserva), así que una queja ≤ 2★ es
+  // verificable. El prestador sale de las búsquedas hasta que el admin aclare
+  // con el cliente y lo reactive (cliente satisfecho).
+  let providerSuspended = false;
+  if (rating <= 2) {
+    const hoy = new Date().toLocaleDateString("es-VE", { day: "numeric", month: "short", year: "numeric" });
+    const note = `⛔ Queja automática: reseña de ${rating}★ de ${auth.name} (${hoy}) por "${
+      booking.service?.name ?? "servicio"
+    }". Suspensión de búsquedas hasta aclarar con el cliente.`.slice(0, 280);
+    const updated = await db.provider.update({
+      where: { id: booking.providerId },
+      data: { status: "SUSPENDED", suspensionNote: note },
+      select: { userId: true, businessName: true },
+    });
+    providerSuspended = true;
+
+    // Avisar al prestador (WhatsApp simulado + in-app)
+    await db.notification.create({
+      data: {
+        userId: updated.userId,
+        channel: "WHATSAPP",
+        template: "CUENTA_SUSPENDIDA",
+        body: `⛔ PetService VE: recibimos una queja (${rating}★) de un cliente sobre tu servicio. Mientras la aclaramos contigo, tu ficha quedó fuera de las búsquedas. Escríbenos al soporte para resolverlo cuanto antes.`,
+        status: "ENVIADO",
+      },
+    });
+    // Avisar al admin (bandeja in-app)
+    const admin = await db.user.findFirst({ where: { role: "ADMIN" }, orderBy: { createdAt: "asc" }, select: { id: true } });
+    if (admin) {
+      await db.notification.create({
+        data: {
+          userId: admin.id,
+          channel: "INAPP",
+          template: "QUEJA_PRESTADOR",
+          body: `🚨 Queja (${rating}★) de ${auth.name} contra ${updated.businessName}: fue AUTO-SUSPENDIDO de las búsquedas. Revisa la reseña y reactiva cuando el cliente quede satisfecho.`,
+          status: "ENVIADO",
+        },
+      });
+    }
+  }
+
+  return NextResponse.json({ review, providerSuspended }, { status: 201 });
 }
 
 /**

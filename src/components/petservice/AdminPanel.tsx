@@ -38,6 +38,7 @@ interface Metrics {
 interface ProviderRow {
   id: string; businessName: string; ownerName: string; email: string; phone: string | null;
   status: string; city: string; zoneName: string; ratingAvg: number; ratingCount: number; badges: string;
+  suspensionNote?: string | null;
 }
 interface PaymentRow {
   id: string; method: string; status: string; amountUsd: number; amountBs: number; reference: string | null; createdAt: string;
@@ -337,6 +338,11 @@ export function AdminPanel() {
                     <div className="mt-0.5 text-xs text-muted-foreground">
                       {p.ownerName} · {p.email} {p.phone ? `· ${p.phone}` : ""} · {p.zoneName}, {p.city} · 🪪 documento cargado (cifrado, solo visible aquí)
                     </div>
+                    {p.status === "SUSPENDED" && p.suspensionNote && (
+                      <p className="mt-1.5 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold leading-snug text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                        {p.suspensionNote}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {p.status !== "VERIFIED" && (
@@ -355,7 +361,7 @@ export function AdminPanel() {
                       </Button>
                     )}
                     {p.status === "SUSPENDED" && (
-                      <Button size="sm" variant="outline" onClick={() => providerAction(p, "reactivate")} className="h-8 rounded-lg px-3 text-xs font-bold">
+                      <Button size="sm" variant="outline" onClick={() => providerAction(p, "reactivate")} title="Cliente satisfecho: reactiva las búsquedas" className="h-8 rounded-lg px-3 text-xs font-bold">
                         <RotateCcw className="h-3.5 w-3.5" /> Reactivar
                       </Button>
                     )}

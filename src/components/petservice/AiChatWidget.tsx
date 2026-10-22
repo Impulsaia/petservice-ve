@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { PawPrint, X, Send, Phone, Sparkles, Bot } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { apiPost } from "@/lib/petservice/api";
+import { SUPPORT_WHATSAPP, SUPPORT_WHATSAPP_WA } from "@/lib/petservice/constants";
 
 interface Msg { role: "user" | "assistant"; content: string }
 
@@ -48,7 +49,7 @@ export function AiChatWidget() {
     } catch {
       setMessages((ms) => [
         ...ms,
-        { role: "assistant", content: "🐾 Uy, se me cruzaron los cables 🤖💥. Intenta de nuevo o escríbenos al WhatsApp +58 412 555 0000." },
+        { role: "assistant", content: `🐾 Uy, se me cruzaron los cables 🤖💥. Intenta de nuevo o escríbenos al WhatsApp ${SUPPORT_WHATSAPP}.` },
       ]);
     } finally {
       setLoading(false);
@@ -97,7 +98,7 @@ export function AiChatWidget() {
             <div className="border-b border-border/70 bg-accent/15 px-4 py-3 text-xs">
               <p className="font-bold text-accent-foreground">👤 Soporte humano</p>
               <p className="mt-1 text-accent-foreground/80">
-                WhatsApp: <strong>+58 412 555 0000</strong> (8am–6pm). También puede gestionar pagos y disputas. ¡Te atendemos al instante!
+                WhatsApp: <a href={`https://wa.me/${SUPPORT_WHATSAPP_WA}`} target="_blank" rel="noopener noreferrer" className="underline font-bold"><strong>{SUPPORT_WHATSAPP}</strong></a> (8am–6pm). También puede gestionar pagos y disputas. ¡Te atendemos al instante!
               </p>
             </div>
           )}

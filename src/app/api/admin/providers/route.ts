@@ -18,6 +18,8 @@ export async function GET(req: Request) {
       email: p.user.email,
       phone: p.user.phone,
       status: p.status,
+      // Motivo de la auto-suspensión por queja (visible solo para el admin)
+      suspensionNote: p.suspensionNote,
       city: p.city,
       zoneName: p.zoneName,
       ratingAvg: p.ratingAvg,
@@ -49,7 +51,11 @@ export async function PATCH(req: Request) {
   const status = statusMap[action];
   if (!status) return NextResponse.json({ error: "Acción no reconocida" }, { status: 400 });
 
-  const provider = await db.provider.update({ where: { id }, data: { status } });
+  // Reactivar = cliente quedó satisfecho: se limpia la nota de la queja automática
+  const data: Record<string, string | null> = { status };
+  if (action === "reactivate") data.suspensionNote = null;
+
+  const provider = await db.provider.update({ where: { id }, data });
   await db.notification.create({
     data: {
       userId: provider.userId,
@@ -62,7 +68,9 @@ export async function PATCH(req: Request) {
             ? `⚠️ PetService VE: Tu verificación fue rechazada. Revisa tus documentos y vuelve a enviarlos.`
             : action === "suspend"
               ? `⛔ PetService VE: Tu cuenta fue suspendida temporalmente. Escribe a soporte para más información.`
-              : `ℹ️ PetService VE: Estado de tu cuenta actualizado a ${status}.`,
+              : action === "reactivate"
+                ? `✅ PetService VE: ¡Tu cuenta fue REACTIVADA, ${provider.businessName}! Ya apareces de nuevo en las búsquedas. Gracias por resolver la situación con tu cliente. 🐾`
+                : `ℹ️ PetService VE: Estado de tu cuenta actualizado a ${status}.`,
       status: "ENVIADO",
     },
   });

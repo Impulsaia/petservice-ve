@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
 import { db, flushDb } from "@/lib/db";
 import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
-import { ZONES } from "@/lib/petservice/constants";
+import { ZONES, SUPPORT_WHATSAPP } from "@/lib/petservice/constants";
 import { matchFirulais } from "@/lib/petservice/firulais";
 
 /**
@@ -58,7 +58,8 @@ export async function POST(req: Request) {
     }
   }
 
-  // Contexto real de la plataforma (catálogo compacto)
+  // Contexto real de la plataforma (catálogo compacto para no saturar el LLM:
+  // un catálogo gigante provoca respuestas vacías/timeout en algunas llamadas)
   const [providers, settings] = await Promise.all([
     db.provider.findMany({
       where: { status: "VERIFIED" },
@@ -66,22 +67,26 @@ export async function POST(req: Request) {
         businessName: true, zoneName: true, city: true, ratingAvg: true,
         services: { where: { active: true }, select: { name: true, category: true, priceUsd: true, durationMin: true } },
       },
+      orderBy: { ratingCount: "desc" },
+      take: 90,
     }),
     db.settings.findUnique({ where: { id: "main" } }),
   ]);
 
   const catalog = providers
-    .map((p) => `${p.businessName} (${p.zoneName}, ${p.city}, ⭐${p.ratingAvg}): ${p.services.map((s) => `${s.name} [${s.category}] $${s.priceUsd}`).join("; ")}`)
-    .join("\n");
+    .slice(0, 90)
+    .map((p) => `${p.businessName} (${p.zoneName}, ${p.city}, ⭐${p.ratingAvg}): ${p.services.map((s) => `${s.name} [${s.category}] $${s.priceUsd}`).join("; ")}`.slice(0, 400))
+    .join("\n")
+    .slice(0, 40_000);
 
-  const systemPrompt = `Eres "Firulais", el asistente virtual de PetService VE 🐾, un marketplace venezolano de servicios a domicilio para mascotas (peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi, spa móvil y VETERINARIA: consultas, vacunación, desparasitación y certificados de salud). Empezamos en el estado Bolívar (Puerto Ordaz, San Félix, Ciudad Bolívar y Upata) y estamos EXPANDIENDO a toda Venezuela 🇻🇪.
+  const systemPrompt = `Eres "Firulais", el asistente virtual de PetService VE 🐾, un marketplace venezolano de servicios a domicilio para mascotas (peluquería, delivery de alimentos/medicinas, pet sitting, paseos, adiestramiento, pet taxi, spa móvil, VETERINARIA: consultas, vacunación, desparasitación y certificados de salud, y también REFUGIOS 🏕️ y ADOPCIÓN responsable ❤️ de mascotas). Empezamos en el estado Bolívar (Puerto Ordaz, San Félix, Ciudad Bolívar y Upata) y estamos EXPANDIENDO a toda Venezuela 🇻🇪.
 
 REGLAS ESTRICTAS:
 1. Responde SIEMPRE en español venezolano (como en Guayana), tono cálido, cercano y útil (máximo ~120 palabras). Usa emojis con moderación 🐶. Puedes usar expresiones criollas con moderación: "a la orden", "chamo/chama", "estamos a la orden". Trata al usuario de "tú".
 2. Usa SOLO los precios y prestadores del catálogo real incluido abajo. NUNCA inventes precios, zonas ni prestadores. Los precios están en USD y su equivalente en bolívares a la tasa del día: ${settings?.usdToBs ?? 40} Bs. por USD (ej: $18 ≈ Bs. ${Math.round((settings?.usdToBs ?? 40) * 18)}). Cuando des un precio, muestra ambas monedas.
 3. NO des diagnósticos ni recetes medicamentos ni dosis. Si preguntan por la salud de su mascota, recomienda con empatía agendar una CONSULTA VETERINARIA de la plataforma (categoría Veterinaria 🩺 — hay vets a domicilio en Puerto Ordaz, San Félix, Ciudad Bolívar y Upata) y ofrece ayuda con pet taxi si es urgencia. Sí puedes dar tips GENERALES de cuidado (alimentación, higiene, paseo, señales de alerta para acudir al vet).
 4. No procesas pagos ni cancelaciones: explica el flujo (el cliente paga con Pago Móvil/transferencia/Zelle/Binance/efectivo, sube la referencia, el admin la concilia) y deriva a soporte humano si el usuario insiste.
-5. Si no sabes algo o piden hablar con una persona, sugiere el botón "Hablar con humano" o el WhatsApp +58 412 555 0000.
+5. Si no sabes algo o piden hablar con una persona, sugiere el botón "Hablar con humano" o el WhatsApp ${SUPPORT_WHATSAPP}.
 6. Para ayudar a reservar: explica que puede tocar un prestador → "Reservar ahora" y elegir servicio, mascota, dirección, horario y método de pago.
 7. Puedes recomendar prestadores del catálogo según zona, tipo de mascota (perro, gato o "michi") y presupuesto. Cobertura activa hoy: ${[...new Set(ZONES.map((z) => z.city))].join(", ")}. Si preguntan por otra ciudad de Venezuela, explica que estamos expandiendo y sugiere revisar la sección de Ciudades.
 8. Si preguntan por horarios de atención general: la plataforma es 24/7 y cada prestador muestra su horario en su perfil.
@@ -92,25 +97,36 @@ ${catalog}
 MÉTODOS DE PAGO: Pago Móvil (Banco de Venezuela, con número de referencia), Transferencia (BOD), Zelle (pagos@petservice.ve), Binance Pay/USDT, Efectivo contra entrega. Escrow lógico: el dinero se libera cuando el servicio se completa.`;
 
   try {
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "assistant", content: systemPrompt },
-        ...messages.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
-      ],
-      thinking: { type: "disabled" },
-    });
+    // 2 intentos: el proveedor LLM falla de forma intermitente (respuesta vacía
+    // o timeout); un reintento inmediato resuelve la mayoría de los casos sin
+    // que el usuario vea el mensaje de "problemita técnico".
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const zai = await ZAI.create();
+        const completion = await zai.chat.completions.create({
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...messages.map((m) => ({ role: m.role, content: m.content })),
+          ],
+          thinking: { type: "disabled" },
+        });
 
-    const reply = completion.choices[0]?.message?.content;
-    if (!reply || !reply.trim()) throw new Error("Respuesta vacía");
+        const reply = completion.choices[0]?.message?.content;
+        if (!reply || !reply.trim()) throw new Error(`Respuesta vacía (intento ${attempt})`);
 
-    return NextResponse.json({ reply: reply.trim() });
+        return NextResponse.json({ reply: reply.trim() });
+      } catch (err) {
+        lastErr = err;
+        console.error(`AI chat error (intento ${attempt}/2):`, err instanceof Error ? err.message : err);
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error("LLM falló tras 2 intentos");
   } catch (e) {
-    console.error("AI chat error:", e);
+    console.error("AI chat error FINAL (fallback demo):", e);
     // Degradación elegante: respuesta predefinida si la IA falla
     return NextResponse.json({
-      reply:
-        "🐾 ¡Hola! Soy Firulais de PetService VE. Estoy teniendo un problemita técnico ahora mismo 😅 pero no te preocupes: puedes explorar prestadores verificados cerca de ti en la página principal, o escríbenos al WhatsApp +58 412 555 0000 y te atendemos al instante.",
+      reply: `🐾 ¡Hola! Soy Firulais de PetService VE. Estoy teniendo un problemita técnico ahora mismo 😅 pero no te preocupes: puedes explorar prestadores verificados cerca de ti en la página principal, o escríbenos al WhatsApp ${SUPPORT_WHATSAPP} y te atendemos al instante.`,
       fallback: true,
     });
   }

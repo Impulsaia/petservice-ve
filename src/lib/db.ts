@@ -193,3 +193,26 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
 // Inicialización ANTES de servir la primera request (el cliente es perezoso:
 // no abre el archivo hasta la primera consulta, que ocurre dentro de init)
 await initDatabaseFile()
+
+/**
+ * Migración ligera e idempotente para la DB cargada (el blob de producción o
+ * la demo embebida pueden venir de un deploy anterior sin las columnas nuevas).
+ * SQLite: basta ALTER TABLE ADD COLUMN si falta.
+ */
+async function ensureSchemaColumns(): Promise<void> {
+  try {
+    const cols = (await db.$queryRawUnsafe<{ name: string }[]>(
+      `PRAGMA table_info('Provider')`
+    )).map((r) => r.name)
+    if (!cols.includes('suspensionNote')) {
+      await db.$executeRawUnsafe(`ALTER TABLE 'Provider' ADD COLUMN 'suspensionNote' TEXT`)
+      // Publica el cambio de esquema al blob compartido para las demás instancias
+      markDirty()
+      await flushDb()
+    }
+  } catch (e) {
+    console.error('[db] ensureSchemaColumns falló:', e instanceof Error ? e.message : e)
+  }
+}
+
+await ensureSchemaColumns()
