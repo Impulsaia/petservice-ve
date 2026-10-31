@@ -98,7 +98,7 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
     // 4) Prestadores: MANUAL → solo insertar; importados → refresco geográfico
     const seedProviders = await seed.provider.findMany()
     for (const p of seedProviders) {
-      const exists = await db0.provider.findUnique({ where: { id: p.id }, select: { id: true, bookingFlowJson: true } })
+      const exists = await db0.provider.findUnique({ where: { id: p.id }, select: { id: true, bookingFlowJson: true, lat: true, lng: true } })
       if (!exists) {
         await db0.provider.create({
           data: {
@@ -124,6 +124,14 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
             googleRating: p.googleRating, googleReviews: p.googleReviews, source: p.source,
             ...(p.bookingFlowJson && !exists.bookingFlowJson ? { bookingFlowJson: p.bookingFlowJson } : {}),
           },
+        })
+      } else if (p.lat !== exists.lat || p.lng !== exists.lng) {
+        // Excepción MANUAL: solo coordenadas/zona (datos de importación, no contenido del
+        // usuario). Corrige pins verificados p.ej. Firulais PZO → Villa Alianza sin tocar
+        // jamás la cuenta, bio, badges ni flujos del prestador.
+        await db0.provider.update({
+          where: { id: p.id },
+          data: { lat: p.lat, lng: p.lng, zoneName: p.zoneName, city: p.city },
         })
       }
     }
