@@ -3,7 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { PawPrint, Star, Clock, ChevronRight, Navigation, Plus, Minus, Frame, LocateFixed, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { categoryMeta, CITIES, ZONES } from "@/lib/petservice/constants";
+import { categoryMeta, CITIES, ZONES, polarBrandLabels } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
 import { projectToMap, getCityBounds, haversineKm, fmtDistance, CITY_BOUNDS, type LatLng } from "@/lib/petservice/geo";
 import { fmtDrive } from "@/lib/petservice/routing";
@@ -27,6 +27,8 @@ export interface ProviderListItem {
   googleRating?: number | null;
   googleReviews?: number | null;
   badges: string;
+  /** Marcas de Alimentos Polar que vende (evidencia verificada; [] = ninguna) */
+  polarBrands?: string[];
   status?: string;
   /** Foto/logotipo del negocio (data URL o https) */
   avatarUrl?: string | null;
@@ -61,6 +63,10 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
   const isTop = p.badges.includes("TOP");
   const rank = providerRank(p);
   const isNew = Boolean(p.isNew);
+  // Productos Empresas Polar verificados (SuperCan, Dogourmet, Champ's, Don Kat, Oh Mai Gat!)
+  const polarBrands = p.polarBrands ?? [];
+  const polarLabels = polarBrandLabels(polarBrands.join(","));
+  const isPolar = polarBrands.length > 0;
 
   return (
     <article
@@ -71,7 +77,9 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
         rank.double && "border-amber-400 bg-gradient-to-b from-amber-50/90 to-card shadow-[0_2px_20px_rgba(245,158,11,0.30)] ring-2 ring-amber-400/60 dark:from-amber-950/30",
         // "Nuevo prestador": tarjeta en color distinto (fucsia) durante su primer mes
         isNew && !rank.double && "border-fuchsia-300 bg-gradient-to-b from-fuchsia-50/90 to-card shadow-[0_2px_16px_rgba(217,70,239,0.18)] dark:border-fuchsia-500/50 dark:from-fuchsia-950/25",
-        isNew && rank.double && "border-fuchsia-400 ring-2 ring-fuchsia-400/60 dark:border-fuchsia-500/60"
+        isNew && rank.double && "border-fuchsia-400 ring-2 ring-fuchsia-400/60 dark:border-fuchsia-500/60",
+        // Prestador Polar (sin otro resaltado): borde rojo suave — color Polar
+        isPolar && !rank.double && !isNew && "border-red-300/90 bg-gradient-to-b from-red-50/70 to-card shadow-[0_2px_16px_rgba(220,38,38,0.12)] dark:border-red-500/40 dark:from-red-950/20"
       )}
     >
       {isNew && (
@@ -136,7 +144,7 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
               </>
             ) : null}
           </div>
-          {(rank.top || rank.psTop || isNew) && (
+          {(rank.top || rank.psTop || isNew || isPolar) && (
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {rank.top && (
                 <span title={`Calificación ${rank.google.toFixed(1)}★ en su ficha pública de Google Maps`} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
@@ -158,12 +166,25 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
                   ✨ Nuevo prestador
                 </span>
               )}
+              {isPolar && (
+                <span title={`Vende productos Empresas Polar verificados: ${polarLabels.join(", ")}`} className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-red-700 dark:bg-red-950/70 dark:text-red-300">
+                  🌽 Polar
+                </span>
+              )}
             </div>
           )}
         </div>
       </div>
 
       <p className="mt-2.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{p.bio}</p>
+
+      {isPolar && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] leading-snug">
+          <span aria-hidden>🌽</span>
+          <span className="font-black uppercase tracking-wide text-red-700 dark:text-red-300">Productos Polar:</span>
+          <span className="font-semibold text-red-800/90 dark:text-red-200/90">{polarLabels.join(" · ")}</span>
+        </div>
+      )}
 
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-border/70 pt-3">
         <div className="flex flex-wrap gap-1">

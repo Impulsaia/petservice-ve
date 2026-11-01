@@ -194,6 +194,7 @@ export function MarketplaceView() {
       if (filters.petType) params.set("petType", filters.petType);
       if (filters.minRating) params.set("minRating", String(filters.minRating));
       params.set("onlyVerified", String(filters.onlyVerified));
+      if (filters.onlyPolar) params.set("polar", "true");
 
       apiGet<{ providers: ProviderListItem[] }>(`/api/providers?${params}`)
         .then((d) => setProviders(d.providers))
@@ -597,6 +598,14 @@ export function MarketplaceView() {
             <label className="inline-flex items-center gap-1.5 rounded-xl bg-secondary px-2.5 py-1.5 text-xs font-bold">
               <Switch checked={filters.onlyVerified} onCheckedChange={(v) => setFilters({ onlyVerified: v })} aria-label="Solo verificados" />
               ✔ Verificados
+            </label>
+
+            <label
+              className="inline-flex items-center gap-1.5 rounded-xl bg-red-100 px-2.5 py-1.5 text-xs font-bold text-red-800 dark:bg-red-950/60 dark:text-red-300"
+              title="Solo prestadores que venden productos Empresas Polar verificados: SuperCan, Dogourmet, Champ's, Don Kat, Oh Mai Gat!"
+            >
+              <Switch checked={filters.onlyPolar} onCheckedChange={(v) => setFilters({ onlyPolar: v })} aria-label="Solo Polar" />
+              🌽 Polar
             </label>
 
             <div className="ml-auto flex items-center gap-2">

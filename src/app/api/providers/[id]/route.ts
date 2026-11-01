@@ -74,6 +74,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       googleRating: p.googleRating,
       googleReviews: p.googleReviews,
       badges: p.badges,
+      polarBrands: p.polarBrands ? p.polarBrands.split(",").map((b) => b.trim()).filter(Boolean) : [],
       avatarUrl: p.avatarUrl,
       isNew: p.newUntil ? p.newUntil.getTime() > Date.now() : false,
       bookingFlow,

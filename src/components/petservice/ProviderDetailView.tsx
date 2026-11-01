@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/petservice/api";
 import { useAppStore } from "@/lib/petservice/store";
-import { categoryMeta, PET_SIZES, PET_SPECIES } from "@/lib/petservice/constants";
+import { categoryMeta, PET_SIZES, PET_SPECIES, POLAR_BRANDS } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs, fmtDateShort, fmtRelative, waLink } from "@/lib/petservice/format";
 import { fmtDrive } from "@/lib/petservice/routing";
 import { Avatar, CategoryIcon, EmptyState, RatingStars } from "@/components/petservice/shared";
@@ -17,6 +17,7 @@ import { BookingFlowDialog, type BookingFlowData } from "@/components/petservice
 interface Detail {
   provider: {
     id: string; businessName: string; ownerName: string; phone?: string | null; bio: string; status: string;
+    polarBrands?: string[];
     city: string; zoneName: string; lat: number; lng: number; radiusKm: number;
     scheduleJson: string; ratingAvg: number; ratingCount: number; badges: string;
     googleRating?: number | null; googleReviews?: number | null;
@@ -73,6 +74,8 @@ export function ProviderDetailView() {
   const rate = settings?.usdToBs ?? 40;
   const meta = categoryMeta(services[0]?.category ?? "GROOMING");
   const schedule = JSON.parse(provider.scheduleJson || "{}") as Record<string, [string, string][]>;
+  // Marcas Empresas Polar que vende (con meta para labels/notas)
+  const polarList = POLAR_BRANDS.filter((b) => provider.polarBrands?.includes(b.key));
 
   return (
     <div className="space-y-5 pb-4">
@@ -350,6 +353,23 @@ export function ProviderDetailView() {
             <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
               <h3 className="font-display font-extrabold">Sobre {provider.businessName}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{provider.bio}</p>
+              {polarList.length > 0 && (
+                <div className="mt-4 rounded-xl border border-red-200 bg-gradient-to-b from-red-50/80 to-transparent p-3.5 dark:border-red-500/30 dark:from-red-950/25">
+                  <div className="flex items-center gap-1.5 text-sm font-black text-red-700 dark:text-red-300">
+                    <span aria-hidden>🌽</span> Productos Empresas Polar
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {polarList.map((b) => (
+                      <span key={b.key} title={b.note} className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-800 dark:bg-red-900/50 dark:text-red-200">
+                        {b.pet === "GATO" ? "🐱" : "🐶"} {b.label}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-snug text-red-800/80 dark:text-red-200/70">
+                    Marcas verificadas con evidencia pública (redes del negocio / Google Maps). Pregunta por disponibilidad y precios al reservar o por WhatsApp.
+                  </p>
+                </div>
+              )}
               {(provider.socials?.instagram || provider.socials?.facebook || provider.socials?.tiktok || provider.socials?.website) && (
                 <div className="mt-4">
                   <h4 className="text-xs font-black uppercase tracking-wide text-muted-foreground">Redes y contacto</h4>

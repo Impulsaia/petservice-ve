@@ -5,6 +5,7 @@
 export type CategoryKey =
   | "GROOMING"
   | "DELIVERY"
+  | "ALIMENTOS"
   | "PET_SITTING"
   | "DOG_WALKING"
   | "TRAINING"
@@ -28,6 +29,7 @@ export interface CategoryMeta {
 export const CATEGORIES: CategoryMeta[] = [
   { key: "GROOMING", label: "Peluquería", tagline: "Baño y corte a domicilio", emoji: "✂️", chip: "bg-teal-600 text-white", soft: "bg-teal-100 dark:bg-teal-900/40", iconColor: "text-teal-700 dark:text-teal-300" },
   { key: "DELIVERY", label: "Delivery", tagline: "Comida y medicinas", emoji: "🛵", chip: "bg-orange-500 text-white", soft: "bg-orange-100 dark:bg-orange-900/40", iconColor: "text-orange-600 dark:text-orange-300" },
+  { key: "ALIMENTOS", label: "Alimentos", tagline: "Perrarinas y comida para mascotas", emoji: "🥣", chip: "bg-red-600 text-white", soft: "bg-red-100 dark:bg-red-900/40", iconColor: "text-red-700 dark:text-red-300" },
   { key: "PET_SITTING", label: "Pet Sitting", tagline: "Cuidado en tu casa", emoji: "🏡", chip: "bg-amber-500 text-white", soft: "bg-amber-100 dark:bg-amber-900/40", iconColor: "text-amber-600 dark:text-amber-300" },
   { key: "DOG_WALKING", label: "Paseos", tagline: "Dog walking feliz", emoji: "🦮", chip: "bg-emerald-600 text-white", soft: "bg-emerald-100 dark:bg-emerald-900/40", iconColor: "text-emerald-700 dark:text-emerald-300" },
   { key: "TRAINING", label: "Adiestramiento", tagline: "Obediencia y conducta", emoji: "🎓", chip: "bg-rose-500 text-white", soft: "bg-rose-100 dark:bg-rose-900/40", iconColor: "text-rose-600 dark:text-rose-300" },
@@ -37,6 +39,37 @@ export const CATEGORIES: CategoryMeta[] = [
   { key: "REFUGIO", label: "Refugios", tagline: "Refugios y rescates de mascotas", emoji: "🏕️", chip: "bg-stone-600 text-white", soft: "bg-stone-100 dark:bg-stone-900/40", iconColor: "text-stone-700 dark:text-stone-300" },
   { key: "ADOPCION", label: "Adopción", tagline: "Adopta, no compres", emoji: "❤️", chip: "bg-pink-500 text-white", soft: "bg-pink-100 dark:bg-pink-900/40", iconColor: "text-pink-600 dark:text-pink-300" },
 ];
+
+// ─────────────── Marcas de Alimentos Polar (pet food) ───────────────
+// Portafolio verificado (prensa + comercios): SuperCan, Dogourmet, Champ's
+// (perros) y Don Kat, Oh Mai Gat! (gatos). Un prestador muestra la insignia
+// «Polar» SOLO con evidencia real de venta (IG/FB del negocio, ficha Google).
+
+export type PolarBrandKey = "SUPERCAN" | "DOGOURMET" | "CHAMPS" | "DONKAT" | "OHMAIGAT";
+
+export interface PolarBrandMeta {
+  key: PolarBrandKey;
+  label: string;
+  pet: "PERRO" | "GATO";
+  note: string;
+}
+
+export const POLAR_BRANDS: PolarBrandMeta[] = [
+  { key: "SUPERCAN", label: "SuperCan", pet: "PERRO", note: "Gama media · Cachorros (0–1 año) y adultos · 2/4/18 kg" },
+  { key: "DOGOURMET", label: "Dogourmet", pet: "PERRO", note: "Recetas con sabores y aromas especiales" },
+  { key: "CHAMPS", label: "Champ's", pet: "PERRO", note: "Económico · 18% proteína · saco 20 kg" },
+  { key: "DONKAT", label: "Don Kat", pet: "GATO", note: "31% proteína · salud cardíaca y urinaria" },
+  { key: "OHMAIGAT", label: "Oh Mai Gat!", pet: "GATO", note: "32% proteína (triple) · Omega 3 · gatos de interior" },
+];
+
+/** Labels de marcas desde el string CSV de Provider.polarBrands */
+export function polarBrandLabels(csv: string | null | undefined): string[] {
+  if (!csv) return [];
+  const keys = csv.split(",").map((k) => k.trim()).filter(Boolean);
+  return keys
+    .map((k) => POLAR_BRANDS.find((b) => b.key === k)?.label ?? k)
+    .filter(Boolean);
+}
 
 /** WhatsApp oficial de soporte PetService VE (único punto de verdad) */
 export const SUPPORT_WHATSAPP = "+58 424 9526402";

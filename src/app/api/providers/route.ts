@@ -11,6 +11,7 @@ import { driveTable } from "@/lib/petservice/routing";
  *   (el río Caroní convierte "1.7 km recta" en ~25 min de carro: se reporta la verdad)
  * - zone → zona administrativa (municipio/parroquia/ciudad)
  * - category, q, minRating (cuenta Google Maps o reseñas internas), petType, sort
+ * - polar=true → solo prestadores que venden marcas de Alimentos Polar (evidencia verificada)
  */
 export async function GET(req: Request) {
   await ensureDbReady();
@@ -30,6 +31,8 @@ export async function GET(req: Request) {
   const minRating = num(searchParams.get("minRating"), 0, 5, 0);
   const petType = searchParams.get("petType");
   const onlyVerified = searchParams.get("onlyVerified") !== "false";
+  // Destacar prestadores con productos Empresas Polar (SuperCan, Dogourmet, Champ's, Don Kat, Oh Mai Gat!)
+  const onlyPolar = searchParams.get("polar") === "true";
   const zone = searchParams.get("zone")?.slice(0, 60) ?? null;
   const sort = searchParams.get("sort") ?? "distance";
   const hasCoords = isFinite(lat) && isFinite(lng);
@@ -51,10 +54,11 @@ export async function GET(req: Request) {
       if (category) filtered = filtered.filter((s) => s.category === category);
       if (petType) filtered = filtered.filter((s) => s.petTypes.split(",").includes(petType));
 
-      // Match textual (sin acentos): nombre, bio, zona o (si no hay filtros de categoría) servicios
+      // Match textual (sin acentos): nombre, bio, zona o (si no hay filtros de categoría) servicios.
+      // Las marcas Polar del prestador también se pueden buscar («supercan», «don kat»…).
       let textMatch = true;
       if (q) {
-        const hay = deacc(`${p.businessName} ${p.bio} ${p.zoneName} ${p.city}`.toLowerCase());
+        const hay = deacc(`${p.businessName} ${p.bio} ${p.zoneName} ${p.city} ${p.polarBrands ?? ""}`.toLowerCase());
         const hayServices = deacc(p.services.map((s) => s.name).join(" ").toLowerCase());
         textMatch = hay.includes(qNorm) || (!category && !petType && hayServices.includes(qNorm));
       }
@@ -80,6 +84,8 @@ export async function GET(req: Request) {
         googleRating: p.googleRating,
         googleReviews: p.googleReviews,
         badges: p.badges,
+        // Marcas Polar que vende (array; [] = sin evidencia) — impulsa la insignia «Polar»
+        polarBrands: p.polarBrands ? p.polarBrands.split(",").map((b) => b.trim()).filter(Boolean) : [],
         status: p.status,
         avatarUrl: p.avatarUrl,
         // "Nuevo prestador": etiqueta destacada durante 1 mes desde el registro manual
@@ -105,6 +111,7 @@ export async function GET(req: Request) {
     })
     .filter((p) => {
       if (!p.textMatch) return false;
+      if (onlyPolar && p.polarBrands.length === 0) return false;
       if ((category || petType) && p.services.length === 0) return false;
       // minRating: vale la ficha de Google Maps O las reseñas internas
       if (minRating && Math.max(p.googleRating ?? 0, p.ratingAvg) < minRating) return false;
@@ -151,6 +158,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     total: results.length,
     providers: results,
-    search: { hasCoords, lat, lng, radius, category, q, zone, drive: results.some((r) => r.driveMin != null) },
+    search: { hasCoords, lat, lng, radius, category, q, zone, polar: onlyPolar, drive: results.some((r) => r.driveMin != null) },
   });
 }

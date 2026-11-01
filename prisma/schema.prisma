@@ -79,6 +79,12 @@ model Provider {
   // null = el prestador usa solo el wizard estándar.
   bookingFlowJson String?
 
+  // Marcas de Alimentos Polar (pet food) que el prestador comercializa, verificadas
+  // con evidencia (IG/Facebook del negocio, ficha Google, directorios).
+  // Separadas por coma: SUPERCAN,DOGOURMET,CHAMPS,DONKAT,OHMAIGAT
+  // null/vacío = sin evidencia de marcas Polar (no muestra la insignia).
+  polarBrands String?
+
   // Auto-suspensión por queja (reseña ≤ 2★ tras servicio completado):
   // nota legible con el motivo; el admin la limpia al reactivar (status → VERIFIED).
   suspensionNote String?

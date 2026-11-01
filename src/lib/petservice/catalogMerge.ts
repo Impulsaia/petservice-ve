@@ -98,7 +98,7 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
     // 4) Prestadores: MANUAL → solo insertar; importados → refresco geográfico
     const seedProviders = await seed.provider.findMany()
     for (const p of seedProviders) {
-      const exists = await db0.provider.findUnique({ where: { id: p.id }, select: { id: true, bookingFlowJson: true, lat: true, lng: true } })
+      const exists = await db0.provider.findUnique({ where: { id: p.id }, select: { id: true, bookingFlowJson: true, polarBrands: true, lat: true, lng: true } })
       if (!exists) {
         await db0.provider.create({
           data: {
@@ -109,6 +109,7 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
             avatarUrl: p.avatarUrl, instagram: p.instagram, facebook: p.facebook, tiktok: p.tiktok,
             website: p.website, source: p.source, newUntil: p.newUntil,
             bookingFlowJson: p.bookingFlowJson, suspensionNote: p.suspensionNote,
+            polarBrands: p.polarBrands,
           },
         })
         continue
@@ -122,16 +123,20 @@ export async function mergeCatalogIfNewer(db0: AnyDb): Promise<boolean> {
             businessName: p.businessName, bio: p.bio, city: p.city, zoneName: p.zoneName,
             lat: p.lat, lng: p.lng, radiusKm: p.radiusKm,
             googleRating: p.googleRating, googleReviews: p.googleReviews, source: p.source,
+            polarBrands: p.polarBrands,
             ...(p.bookingFlowJson && !exists.bookingFlowJson ? { bookingFlowJson: p.bookingFlowJson } : {}),
           },
         })
-      } else if (p.lat !== exists.lat || p.lng !== exists.lng) {
+      } else if (p.lat !== exists.lat || p.lng !== exists.lng || p.polarBrands !== exists.polarBrands) {
         // Excepción MANUAL: solo coordenadas/zona (datos de importación, no contenido del
-        // usuario). Corrige pins verificados p.ej. Firulais PZO → Villa Alianza sin tocar
-        // jamás la cuenta, bio, badges ni flujos del prestador.
+        // usuario) y marcas Polar verificadas por la plataforma. Corrige pins verificados
+        // p.ej. Firulais PZO → Villa Alianza sin tocar jamás la cuenta, bio, badges ni flujos.
         await db0.provider.update({
           where: { id: p.id },
-          data: { lat: p.lat, lng: p.lng, zoneName: p.zoneName, city: p.city },
+          data: {
+            ...(p.lat !== exists.lat || p.lng !== exists.lng ? { lat: p.lat, lng: p.lng, zoneName: p.zoneName, city: p.city } : {}),
+            ...(p.polarBrands !== exists.polarBrands ? { polarBrands: p.polarBrands } : {}),
+          },
         })
       }
     }

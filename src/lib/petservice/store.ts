@@ -16,6 +16,8 @@ export interface Filters {
   minRating: number;
   petType: string | null;
   onlyVerified: boolean;
+  /** Solo prestadores que venden marcas de Alimentos Polar (evidencia verificada) */
+  onlyPolar: boolean;
   sort: SortMode;
 }
 
@@ -83,6 +85,7 @@ const defaultFilters: Filters = {
   minRating: 0,
   petType: null,
   onlyVerified: true,
+  onlyPolar: false,
   sort: "distance",
 };
 
