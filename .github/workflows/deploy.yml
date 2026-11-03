@@ -25,6 +25,26 @@ jobs:
       - name: Generar cliente Prisma
         run: bunx prisma generate
 
+      # La IA (Firulais) necesita credenciales Z-AI en el runtime de Vercel.
+      # El SDK solo lee archivos .z-ai-config (inexistentes en lambdas), así que
+      # inyectamos la config DENTRO del bundle: CI genera src/lib/petservice/
+      # zaiConfig.ts desde estos secretos antes de compilar (mismo patrón que
+      # demoDb.ts). En el repo el archivo viaja con strings vacíos.
+      - name: Inyectar config del LLM (ZAI) en el bundle
+        run: |
+          cat > src/lib/petservice/zaiConfig.ts <<EOF
+          // AUTO-GENERADO por CI desde los secretos ZAI_*. No commitear valores reales.
+          export const ZAI_CONFIG = {
+            baseUrl: "${ZAI_BASE_URL}",
+            apiKey: "${ZAI_API_KEY}",
+            token: "${ZAI_TOKEN}",
+          };
+          EOF
+        env:
+          ZAI_BASE_URL: ${{ secrets.ZAI_BASE_URL }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_TOKEN: ${{ secrets.ZAI_TOKEN }}
+
       - name: Pull config de Vercel
         run: bunx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
         env:
