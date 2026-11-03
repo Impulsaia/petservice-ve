@@ -1,8 +1,9 @@
 import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
-import { ZONES, SUPPORT_WHATSAPP } from "@/lib/petservice/constants";
+import { SUPPORT_WHATSAPP } from "@/lib/petservice/constants";
 import { matchFirulais } from "@/lib/petservice/firulais";
+import { basicFirulaisReply } from "@/lib/petservice/firulaisBasic";
 import { createZai } from "@/lib/petservice/zai";
 
 /**
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
 
   // Contexto real de la plataforma (catálogo compacto para no saturar el LLM:
   // un catálogo gigante provoca respuestas vacías/timeout en algunas llamadas)
-  const [providers, settings] = await Promise.all([
+  const [providers, settings, cityGroups] = await Promise.all([
     db.provider.findMany({
       where: { status: "VERIFIED" },
       select: {
@@ -71,7 +72,14 @@ export async function POST(req: Request) {
       take: 90,
     }),
     db.settings.findUnique({ where: { id: "main" } }),
+    db.provider.groupBy({ by: ["city"], where: { status: "VERIFIED" }, _count: { city: true } }),
   ]);
+
+  // Cobertura real: ciudades con al menos un prestador verificado (ordenadas por cantidad)
+  const cobertura = [...cityGroups]
+    .sort((a, b) => b._count.city - a._count.city)
+    .map((c) => `${c.city} (${c._count.city})`)
+    .join(", ");
 
   const catalog = providers
     .slice(0, 90)
@@ -84,11 +92,11 @@ export async function POST(req: Request) {
 REGLAS ESTRICTAS:
 1. Responde SIEMPRE en español venezolano (como en Guayana), tono cálido, cercano y útil (máximo ~120 palabras). Usa emojis con moderación 🐶. Puedes usar expresiones criollas con moderación: "a la orden", "chamo/chama", "estamos a la orden". Trata al usuario de "tú".
 2. Usa SOLO los precios y prestadores del catálogo real incluido abajo. NUNCA inventes precios, zonas ni prestadores. Los precios están en USD y su equivalente en bolívares a la tasa del día: ${settings?.usdToBs ?? 40} Bs. por USD (ej: $18 ≈ Bs. ${Math.round((settings?.usdToBs ?? 40) * 18)}). Cuando des un precio, muestra ambas monedas.
-3. NO des diagnósticos ni recetes medicamentos ni dosis. Si preguntan por la salud de su mascota, recomienda con empatía agendar una CONSULTA VETERINARIA de la plataforma (categoría Veterinaria 🩺 — hay vets a domicilio en Puerto Ordaz, San Félix, Ciudad Bolívar y Upata) y ofrece ayuda con pet taxi si es urgencia. Sí puedes dar tips GENERALES de cuidado (alimentación, higiene, paseo, señales de alerta para acudir al vet).
+3. NO des diagnósticos ni recetes medicamentos ni dosis. Si preguntan por la salud de su mascota, recomienda con empatía agendar una CONSULTA VETERINARIA de la plataforma (categoría Veterinaria 🩺 — hay vets a domicilio en varias ciudades) y ofrece ayuda con pet taxi si es urgencia. Sí puedes dar tips GENERALES de cuidado (alimentación, higiene, paseo, señales de alerta para acudir al vet).
 4. No procesas pagos ni cancelaciones: explica el flujo (el cliente paga con Pago Móvil/transferencia/Zelle/Binance/efectivo, sube la referencia, el admin la concilia) y deriva a soporte humano si el usuario insiste.
 5. Si no sabes algo o piden hablar con una persona, sugiere el botón "Hablar con humano" o el WhatsApp ${SUPPORT_WHATSAPP}.
 6. Para ayudar a reservar: explica que puede tocar un prestador → "Reservar ahora" y elegir servicio, mascota, dirección, horario y método de pago.
-7. Puedes recomendar prestadores del catálogo según zona, tipo de mascota (perro, gato o "michi") y presupuesto. Cobertura activa hoy: ${[...new Set(ZONES.map((z) => z.city))].join(", ")}. Si preguntan por otra ciudad de Venezuela, explica que estamos expandiendo y sugiere revisar la sección de Ciudades.
+7. Puedes recomendar prestadores del catálogo según zona, tipo de mascota (perro, gato o "michi") y presupuesto. Cobertura activa hoy (ciudad: nº de prestadores): ${cobertura}. Si preguntan por otra ciudad de Venezuela, explica que estamos expandiendo y sugiere revisar la sección de Ciudades.
 8. Si preguntan por horarios de atención general: la plataforma es 24/7 y cada prestador muestra su horario en su perfil.
 
 CATÁLOGO REAL (actualizado hoy):
@@ -123,14 +131,15 @@ MÉTODOS DE PAGO: Pago Móvil (Banco de Venezuela, con número de referencia), T
     }
     throw lastErr instanceof Error ? lastErr : new Error("LLM falló tras 2 intentos");
   } catch (e) {
-    console.error("AI chat error FINAL (fallback demo):", e);
-    // TEMPORAL (diagnóstico): campo debug con el error real; se quita tras arreglar
-    const dbg = e instanceof Error ? `${e.name}: ${e.message}`.slice(0, 200) : String(e).slice(0, 200);
-    // Degradación elegante: respuesta predefinida si la IA falla
+    console.error("AI chat error (modo básico determinista):", e instanceof Error ? e.message : e);
+    // Modo básico SIN LLM: en producción la API interna de Z-AI no es
+    // alcanzable desde Vercel (IPs privadas de la red Aliyun). En vez de un
+    // mensaje de error, Firulais responde con información real de la
+    // plataforma detectando la intención (ciudades, precios, reserva, pagos,
+    // veterinaria, adopción, alimentos/Polar…).
     return NextResponse.json({
-      reply: `🐾 ¡Hola! Soy Firulais de PetService VE. Estoy teniendo un problemita técnico ahora mismo 😅 pero no te preocupes: puedes explorar prestadores verificados cerca de ti en la página principal, o escríbenos al WhatsApp ${SUPPORT_WHATSAPP} y te atendemos al instante.`,
-      fallback: true,
-      debug: dbg,
+      reply: basicFirulaisReply(lastUser?.content ?? ""),
+      basic: true,
     });
   }
 }

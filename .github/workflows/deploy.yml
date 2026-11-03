@@ -38,12 +38,16 @@ jobs:
             baseUrl: "${ZAI_BASE_URL}",
             apiKey: "${ZAI_API_KEY}",
             token: "${ZAI_TOKEN}",
+            publicKey: "${ZAI_PUBLIC_KEY}",
+            publicModel: "${ZAI_PUBLIC_MODEL}",
           };
           EOF
         env:
           ZAI_BASE_URL: ${{ secrets.ZAI_BASE_URL }}
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
           ZAI_TOKEN: ${{ secrets.ZAI_TOKEN }}
+          ZAI_PUBLIC_KEY: ${{ secrets.ZAI_PUBLIC_KEY }}
+          ZAI_PUBLIC_MODEL: ${{ secrets.ZAI_PUBLIC_MODEL }}
 
       - name: Pull config de Vercel
         run: bunx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
