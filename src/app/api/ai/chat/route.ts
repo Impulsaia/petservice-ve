@@ -124,10 +124,13 @@ MÉTODOS DE PAGO: Pago Móvil (Banco de Venezuela, con número de referencia), T
     throw lastErr instanceof Error ? lastErr : new Error("LLM falló tras 2 intentos");
   } catch (e) {
     console.error("AI chat error FINAL (fallback demo):", e);
+    // TEMPORAL (diagnóstico): campo debug con el error real; se quita tras arreglar
+    const dbg = e instanceof Error ? `${e.name}: ${e.message}`.slice(0, 200) : String(e).slice(0, 200);
     // Degradación elegante: respuesta predefinida si la IA falla
     return NextResponse.json({
       reply: `🐾 ¡Hola! Soy Firulais de PetService VE. Estoy teniendo un problemita técnico ahora mismo 😅 pero no te preocupes: puedes explorar prestadores verificados cerca de ti en la página principal, o escríbenos al WhatsApp ${SUPPORT_WHATSAPP} y te atendemos al instante.`,
       fallback: true,
+      debug: dbg,
     });
   }
 }
