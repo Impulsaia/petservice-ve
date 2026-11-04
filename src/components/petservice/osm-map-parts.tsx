@@ -25,7 +25,7 @@ import { PawPrint, Star, Navigation, LocateFixed, TriangleAlert, RotateCcw, Map 
 import { cn } from "@/lib/utils";
 import { categoryMeta, CITIES, ZONES } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
-import { getCityBounds, haversineKm, fmtDistance, CITY_BOUNDS, type LatLng } from "@/lib/petservice/geo";
+import { haversineKm, fmtDistance, CITY_BOUNDS, NATIONAL_CITY_BOUNDS, type CityBounds, type LatLng } from "@/lib/petservice/geo";
 import { fmtDrive } from "@/lib/petservice/routing";
 import { providerRank } from "@/components/petservice/marketplace-parts";
 import { useAppStore } from "@/lib/petservice/store";
@@ -35,7 +35,6 @@ import {
   providerPinIcon,
   searchPinIcon,
   petPoiIcon,
-  VENEZUELA_CENTER,
 } from "@/lib/petservice/google-maps";
 import type { MapEngineProps } from "@/components/petservice/google-map-parts";
 
@@ -107,27 +106,49 @@ export function OsmMapPanel({ providers, rate, sector, vacant, onFallback }: Osm
     fresh.current = { loc, city, openProvider, providers, sector, vacant };
   });
 
-  /** centra la cámara según la ciudad activa (o vista nacional) */
+  /** ciudad ya encuadrada de forma definitiva (null = encuadre provisional pendiente) */
+  const fittedCityRef = useRef<string | null>(null);
+
+  /** bounds de la ciudad activa: precisos (Bolívar) o nacionales generados desde la DB */
+  function boundsFor(c: string): CityBounds | null {
+    return CITY_BOUNDS[c] ?? NATIONAL_CITY_BOUNDS[c] ?? null;
+  }
+
+  /**
+   * centra la cámara según la ciudad activa (o vista nacional).
+   *
+   * Cadena: bounds de la ciudad → ciudad «próximamente» → prestadores que YA
+   * son de la ciudad → centro de la ciudad (loc). El punto clave: NUNCA
+   * encuadramos con prestadores de otra ciudad — cuando cambias de ciudad los
+   * prestadores nuevos tardan ~400 ms en llegar (refetch async) y usar los
+   * viejos dejaba el mapa «una ciudad atrás».
+   */
   function fitCamera() {
     const L = leafletRef.current;
     const map = mapRef.current;
     if (!L || !map) return;
-    const { city: c, providers: ps, vacant: v } = fresh.current;
+    const { city: c, providers: ps, vacant: v, loc: l } = fresh.current;
     const pad = { paddingTopLeft: [14, 56], paddingBottomRight: [14, 84] } as const;
-    if (CITY_BOUNDS[c]) {
-      const b = getCityBounds(c);
+    const b = boundsFor(c);
+    if (b) {
       map.fitBounds([[b.minLat, b.minLng], [b.maxLat, b.maxLng]], { ...pad, maxZoom: 15 });
-      return;
-    }
-    if (ps.length > 0) {
-      map.fitBounds(L.latLngBounds(ps.map((p) => [p.lat, p.lng] as [number, number])), { ...pad, maxZoom: 16 });
+      fittedCityRef.current = c;
       return;
     }
     if (v?.lat != null && v?.lng != null) {
       map.setView([v.lat, v.lng], 13);
+      fittedCityRef.current = c;
       return;
     }
-    map.setView([VENEZUELA_CENTER.lat, VENEZUELA_CENTER.lng], 5.4);
+    if (ps.length > 0 && ps.some((p) => p.city === c)) {
+      map.fitBounds(L.latLngBounds(ps.map((p) => [p.lat, p.lng] as [number, number])).pad(0.12), { ...pad, maxZoom: 16 });
+      fittedCityRef.current = c;
+      return;
+    }
+    // Provisional: centro de la ciudad (loc acaba de re-centrarse al cambiar);
+    // cuando lleguen los prestadores de ESTA ciudad, el efecto de abajo encuadra.
+    map.setView([l.lat, l.lng], 13);
+    fittedCityRef.current = null;
   }
 
   function commitSearchAt(ll: LatLng) {
@@ -219,6 +240,18 @@ export function OsmMapPanel({ providers, rate, sector, vacant, onFallback }: Osm
     if (status !== "ready") return;
     fitCamera();
   }, [status, city, vacant?.name]);
+
+  // ─── Encuadre definitivo al llegar los prestadores de la ciudad pendiente ───
+  // Cubre la carrera async: chooseCity → (refetch ~400 ms) → providers nuevos.
+  // Si ya encuadramos ESTA ciudad (bounds o «próximamente»), no tocamos la cámara
+  // (así arrastrar el pin o cambiar el radio NO recentra el mapa a cada rato).
+  useEffect(() => {
+    if (status !== "ready") return;
+    const c = fresh.current.city;
+    if (fittedCityRef.current === c) return;
+    const ps = fresh.current.providers;
+    if (ps.length > 0 && ps.some((p) => p.city === c)) fitCamera();
+  }, [status, providers, city]);
 
   // ─── Pines de prestadores ───
   useEffect(() => {
@@ -449,7 +482,7 @@ export function OsmMapPanel({ providers, rate, sector, vacant, onFallback }: Osm
     setAttempt((a) => a + 1);
   }
 
-  const national = !CITY_BOUNDS[city];
+  const national = !boundsFor(city) && !vacant;
 
   return (
     <div className="relative h-full min-h-[420px] select-none overflow-hidden rounded-3xl border border-border/70 shadow-warm">

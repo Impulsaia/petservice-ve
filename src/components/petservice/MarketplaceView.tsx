@@ -292,14 +292,14 @@ export function MarketplaceView() {
   return (
     <div className="space-y-8">
       {/* ───────────────── Hero ───────────────── */}
-      <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-primary via-primary to-emerald-700 px-6 py-8 text-white shadow-warm sm:px-10 sm:py-12">
+      <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-primary via-primary to-emerald-700 px-6 py-5 text-white shadow-warm sm:px-10 sm:py-7">
         <div className="bg-paw-dots pointer-events-none absolute inset-0 opacity-20" aria-hidden />
         <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-accent/25 blur-2xl" aria-hidden />
         <div className="absolute -bottom-28 right-40 h-56 w-56 rounded-full bg-white/10 blur-2xl" aria-hidden />
 
         <div className="relative grid items-center gap-8 lg:grid-cols-[1.2fr_1fr]">
           <div>
-            <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
+            <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
               <ShieldCheck className="h-3.5 w-3.5" /> Servicios para mascotas a domicilio en toda Venezuela 🇻🇪
             </span>
             <h1 className="font-display text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-[2.75rem]">
@@ -307,14 +307,14 @@ export function MarketplaceView() {
               <br />
               <span className="text-accent">sin salir de casa</span> 🐾
             </h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
               Peluquería, veterinaria, delivery, pet sitting, paseos y más — a domicilio en <strong>toda Venezuela</strong> 🇻🇪, con pago en{" "}
               <strong>USD o Bs.</strong> Activos hoy en Bolívar · llegando pronto a {cities?.length ?? 29} ciudades. Prueba la búsqueda con IA:{" "}
               <em>“veterinario para michi en El Roble”</em> ✨
             </p>
 
             {/* Búsqueda */}
-            <form onSubmit={submitSearch} className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <form onSubmit={submitSearch} className="mt-4 flex flex-col gap-2 sm:flex-row">
               <div className="flex flex-1 items-center gap-2 rounded-2xl bg-white p-1.5 shadow-lg">
                 <Search className="ml-2 h-4 w-4 shrink-0 text-zinc-400" />
                 <input
@@ -355,7 +355,7 @@ export function MarketplaceView() {
 
             {/* Barra de ubicación compacta: dropdown de Ciudad + dropdown de Sector + GPS.
                 Reemplaza los chips individuales para evitar el exceso de botones. */}
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
               {/* Ciudad: las 29 ciudades de Venezuela, agrupadas por estado y con buscador */}
               <Popover open={citiesOpen} onOpenChange={setCitiesOpen}>
                 <PopoverTrigger asChild>
@@ -503,7 +503,7 @@ export function MarketplaceView() {
                 src="/hero-pets.png"
                 alt="Ilustración: cachorro bañándose con burbujas y un gato curioso"
                 onError={() => setHeroOk(false)}
-                className="animate-floaty max-h-72 w-auto rounded-3xl border-4 border-white/20 object-cover shadow-2xl"
+                className="animate-floaty max-h-60 w-auto rounded-3xl border-4 border-white/20 object-cover shadow-2xl"
               />
             ) : (
               <div className="flex h-56 w-72 items-center justify-center rounded-3xl border-4 border-white/20 bg-white/10 text-7xl backdrop-blur">🛁🐾</div>

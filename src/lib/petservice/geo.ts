@@ -32,6 +32,34 @@ export interface CityBounds {
   kmTall: number;
 }
 
+/**
+ * Bounds reales de TODAS las ciudades del catálogo nacional (tabla City +
+ * extensión de los prestadores verificados de cada ciudad, con margen).
+ * Generado desde la DB — permite que el mapa encuadre CUALQUIER ciudad al
+ * cambiarla, sin esperar el refetch async de prestadores (bug «el mapa se
+ * queda en la ciudad anterior»).
+ */
+export const NATIONAL_CITY_BOUNDS: Record<string, CityBounds> = {
+  Barcelona: { minLat: 10.0739, maxLat: 10.202, minLng: -64.7715, maxLng: -64.6441, kmWide: 14, kmTall: 14.2 },
+  Barinas: { minLat: 8.5877, maxLat: 8.7949, minLng: -70.4456, maxLng: -70.1781, kmWide: 29.3, kmTall: 23 },
+  Barquisimeto: { minLat: 9.9845, maxLat: 10.1163, minLng: -69.3849, maxLng: -69.2465, kmWide: 15.2, kmTall: 14.6 },
+  Caracas: { minLat: 10.2772, maxLat: 10.6694, minLng: -67.147, maxLng: -66.5128, kmWide: 69.4, kmTall: 43.5 },
+  "Ciudad Bolívar": { minLat: 8.078, maxLat: 8.1744, minLng: -63.6184, maxLng: -63.4917, kmWide: 13.9, kmTall: 10.7 },
+  "El Tigre": { minLat: 8.8355, maxLat: 8.9492, minLng: -64.2986, maxLng: -64.1474, kmWide: 16.6, kmTall: 12.6 },
+  Guanare: { minLat: 9.0003, maxLat: 9.0703, minLng: -69.7806, maxLng: -69.7106, kmWide: 7.7, kmTall: 7.8 },
+  "La Guaira": { minLat: 10.4498, maxLat: 10.5198, minLng: -66.9765, maxLng: -66.9065, kmWide: 7.7, kmTall: 7.8 },
+  Maracaibo: { minLat: 10.4848, maxLat: 10.7358, minLng: -71.8946, maxLng: -71.5516, kmWide: 37.6, kmTall: 27.9 },
+  Maracay: { minLat: 10.1611, maxLat: 10.2311, minLng: -67.4973, maxLng: -67.4273, kmWide: 7.7, kmTall: 7.8 },
+  Maturín: { minLat: 9.6876, maxLat: 9.82, minLng: -63.2306, maxLng: -63.0967, kmWide: 14.7, kmTall: 14.7 },
+  Mérida: { minLat: 8.5589, maxLat: 8.6289, minLng: -71.1923, maxLng: -71.1223, kmWide: 7.7, kmTall: 7.8 },
+  Porlamar: { minLat: 10.9569, maxLat: 11.0269, minLng: -63.8679, maxLng: -63.7979, kmWide: 7.7, kmTall: 7.8 },
+  "Puerto La Cruz": { minLat: 10.0889, maxLat: 10.2568, minLng: -64.7285, maxLng: -64.5954, kmWide: 14.6, kmTall: 18.6 },
+  "Puerto Ordaz": { minLat: 8.1889, maxLat: 8.3564, minLng: -62.8696, maxLng: -62.6733, kmWide: 21.5, kmTall: 18.6 },
+  "San Cristóbal": { minLat: 7.7473, maxLat: 7.828, minLng: -72.2577, maxLng: -72.165, kmWide: 10.2, kmTall: 9 },
+  "San Félix": { minLat: 8.3008, maxLat: 8.4078, minLng: -62.7064, maxLng: -62.596, kmWide: 12.1, kmTall: 11.9 },
+  Upata: { minLat: 7.9545, maxLat: 8.0553, minLng: -62.4579, maxLng: -62.3523, kmWide: 11.6, kmTall: 11.2 },
+};
+
 export const CITY_BOUNDS: Record<string, CityBounds> = {
   "Puerto Ordaz": {
     minLat: 8.235,
@@ -70,7 +98,7 @@ export const CITY_BOUNDS: Record<string, CityBounds> = {
 export const DEFAULT_CITY = "Puerto Ordaz";
 
 export function getCityBounds(city: string): CityBounds {
-  return CITY_BOUNDS[city] ?? CITY_BOUNDS[DEFAULT_CITY];
+  return CITY_BOUNDS[city] ?? NATIONAL_CITY_BOUNDS[city] ?? CITY_BOUNDS[DEFAULT_CITY];
 }
 
 /** Proyecta lat/lng a porcentaje (0-100) dentro del mapa SVG de una ciudad */

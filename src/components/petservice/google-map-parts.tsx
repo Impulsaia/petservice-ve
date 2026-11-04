@@ -20,7 +20,7 @@ import { PawPrint, Star, Navigation, LocateFixed, TriangleAlert, RotateCcw, Map 
 import { cn } from "@/lib/utils";
 import { categoryMeta, CITIES, ZONES } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
-import { getCityBounds, haversineKm, CITY_BOUNDS, type LatLng } from "@/lib/petservice/geo";
+import { haversineKm, CITY_BOUNDS, NATIONAL_CITY_BOUNDS, type CityBounds, type LatLng } from "@/lib/petservice/geo";
 import { useAppStore } from "@/lib/petservice/store";
 import { toast } from "sonner";
 import {
@@ -32,7 +32,6 @@ import {
   providerPinIcon,
   searchPinIcon,
   petPoiIcon,
-  VENEZUELA_CENTER,
 } from "@/lib/petservice/google-maps";
 import { MapPanel, type MapSectorPin, type ProviderListItem } from "@/components/petservice/marketplace-parts";
 import { OsmMapPanel } from "@/components/petservice/osm-map-parts";
@@ -108,32 +107,49 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
     fresh.current = { loc, city, openProvider, providers, sector, vacant };
   });
 
-  /** centra la cámara según la ciudad activa (o vista nacional) */
+  /** ciudad ya encuadrada de forma definitiva (null = encuadre provisional pendiente) */
+  const fittedCityRef = useRef<string | null>(null);
+
+  /** bounds de la ciudad activa: precisos (Bolívar) o nacionales generados desde la DB */
+  function boundsFor(c: string): CityBounds | null {
+    return CITY_BOUNDS[c] ?? NATIONAL_CITY_BOUNDS[c] ?? null;
+  }
+
+  /**
+   * centra la cámara según la ciudad activa (o vista nacional).
+   * Igual que en OsmMapPanel: NUNCA encuadramos con prestadores de otra ciudad
+   * (llegan async ~400 ms después del cambio); si aún no hay de esta ciudad,
+   * vista provisional al centro (loc) y el efecto de llegada encuadra después.
+   */
   function fitCamera() {
     const map = mapRef.current;
     if (!map) return;
-    const { city: c, providers: ps, vacant: v } = fresh.current;
-    if (CITY_BOUNDS[c]) {
-      const b = getCityBounds(c);
+    const { city: c, providers: ps, vacant: v, loc: l } = fresh.current;
+    const b = boundsFor(c);
+    if (b) {
       map.fitBounds(
         new google.maps.LatLngBounds({ lat: b.minLat, lng: b.minLng }, { lat: b.maxLat, lng: b.maxLng }),
         14
       );
-      return;
-    }
-    if (ps.length > 0) {
-      const b = new google.maps.LatLngBounds();
-      ps.forEach((p) => b.extend({ lat: p.lat, lng: p.lng }));
-      map.fitBounds(b, 40);
+      fittedCityRef.current = c;
       return;
     }
     if (v?.lat != null && v?.lng != null) {
       map.panTo({ lat: v.lat, lng: v.lng });
       map.setZoom(13);
+      fittedCityRef.current = c;
       return;
     }
-    map.panTo(VENEZUELA_CENTER);
-    map.setZoom(5.4);
+    if (ps.length > 0 && ps.some((p) => p.city === c)) {
+      const bb = new google.maps.LatLngBounds();
+      ps.forEach((p) => bb.extend({ lat: p.lat, lng: p.lng }));
+      map.fitBounds(bb, 40);
+      fittedCityRef.current = c;
+      return;
+    }
+    map.panTo({ lat: l.lat, lng: l.lng });
+    map.setZoom(13);
+    fittedCityRef.current = null;
   }
 
   function commitSearchAt(ll: LatLng) {
@@ -213,6 +229,15 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
     if (status !== "ready") return;
     fitCamera();
   }, [status, city, vacant?.name]);
+
+  // ─── Encuadre definitivo al llegar los prestadores de la ciudad pendiente ───
+  useEffect(() => {
+    if (status !== "ready") return;
+    const c = fresh.current.city;
+    if (fittedCityRef.current === c) return;
+    const ps = fresh.current.providers;
+    if (ps.length > 0 && ps.some((p) => p.city === c)) fitCamera();
+  }, [status, providers, city]);
 
   // ─── Pines de prestadores ───
   useEffect(() => {
@@ -445,7 +470,7 @@ export function GoogleMapPanel({ providers, rate, sector, vacant, apiKey, onFall
     setAttempt((a) => a + 1);
   }
 
-  const national = !CITY_BOUNDS[city];
+  const national = !boundsFor(city) && !vacant;
 
   return (
     <div className="relative h-full min-h-[420px] select-none overflow-hidden rounded-3xl border border-border/70 shadow-warm">

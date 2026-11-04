@@ -104,13 +104,15 @@ export function matchFirulais(
         continue;
       }
       // 3) Coincidencia parcial por prefijo (stemming barato: "veterinari"~"veterinaria").
+      //    Exige tallos de ≥5 letras para no emparejar cosas distintas que
+      //    comparten 4 letras ("quien hace" vs "quien eres", "hace" vs "haces").
       //    Cuenta máximo una vez por keyword para no inflar el score.
       let partial = false;
       for (const kt of kwTokens) {
         if (partial) break;
-        if (kt.length < 4) continue;
+        if (kt.length < 5) continue;
         for (const qt of qTokens) {
-          if (qt.length >= 4 && (qt.startsWith(kt) || kt.startsWith(qt))) {
+          if (qt.length >= 5 && (qt.startsWith(kt) || kt.startsWith(qt))) {
             score += 0.8;
             partial = true;
             break;

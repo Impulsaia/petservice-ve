@@ -4,16 +4,21 @@ import { rateLimit, clientIp, sameOriginOrError, readJson, cleanText } from "@/l
 import { SUPPORT_WHATSAPP } from "@/lib/petservice/constants";
 import { matchFirulais } from "@/lib/petservice/firulais";
 import { basicFirulaisReply } from "@/lib/petservice/firulaisBasic";
+import { catalogAnswer } from "@/lib/petservice/firulaisCatalog";
 import { createZai } from "@/lib/petservice/zai";
 
 /**
  * POST /api/ai/chat — Asistente del cliente (IA transversal con guardrails)
- * 1. Firulais 🐕 (FAQ determinista): match contra FirulaisEntry activas ANTES
- *    del LLM — si responde, se incrementa hits (fire-and-forget) y no hay
- *    costo de LLM. Las preguntas sin match se loguean (FirulaisLog) para
- *    entrenar la base de conocimiento.
- * 2. LLM con guardrails: no diagnósticos veterinarios, no inventar precios,
+ * 1. Respuesta con CATÁLOGO REAL (firulaisCatalog): para «¿quién hace X en Y?»
+ *    y «¿cuánto cuesta un baño?» responde con prestadores verificados, zonas y
+ *    precios reales — instantáneo y sin LLM (en producción la API interna de
+ *    Z-AI no siempre es alcanzable desde Vercel).
+ * 2. Firulais 🐕 (FAQ determinista): match contra FirulaisEntry activas — si
+ *    responde, se incrementa hits (fire-and-forget) y no hay costo de LLM.
+ *    Las preguntas sin match se loguean (FirulaisLog) para entrenar la base.
+ * 3. LLM con guardrails: no diagnósticos veterinarios, no inventar precios,
  *    catálogo real inyectado, derivar a humano.
+ * 4. Modo básico determinista (firulaisBasic) como última red de seguridad.
  */
 
 export const maxDuration = 60;
@@ -41,8 +46,48 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "messages requerido" }, { status: 400 });
   }
 
-  // ── 1) Firulais 🐕: FAQ determinista antes del LLM ──
+  // Contexto real de la plataforma (se usa para la respuesta por catálogo, el
+  // prompt del LLM y el fallback básico). Se cargan TODOS los verificados:
+  // con take 90 el catálogo se quedaba sin prestadores de ciudades pequeñas.
+  const [providers, settings, cityGroups] = await Promise.all([
+    db.provider.findMany({
+      where: { status: "VERIFIED" },
+      select: {
+        businessName: true, zoneName: true, city: true, ratingAvg: true, polarBrands: true,
+        services: { where: { active: true }, select: { name: true, category: true, priceUsd: true, durationMin: true } },
+      },
+      orderBy: { ratingCount: "desc" },
+      take: 400,
+    }),
+    db.settings.findUnique({ where: { id: "main" } }),
+    db.provider.groupBy({ by: ["city"], where: { status: "VERIFIED" }, _count: { city: true } }),
+  ]);
+
+  const usdToBs = settings?.usdToBs ?? 40;
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
+
+  // ── 1) Respuesta con catálogo real («¿quién hace grooming de gatos en X?») ──
+  if (lastUser?.content) {
+    try {
+      const catReply = catalogAnswer(
+        lastUser.content,
+        providers.map((p) => ({
+          businessName: p.businessName,
+          zoneName: p.zoneName,
+          city: p.city,
+          ratingAvg: p.ratingAvg,
+          polarBrands: p.polarBrands,
+          services: p.services.map((s) => ({ name: s.name, category: s.category, priceUsd: s.priceUsd })),
+        })),
+        usdToBs
+      );
+      if (catReply) return NextResponse.json({ reply: catReply, source: "catalog" });
+    } catch (e) {
+      console.error("Firulais catalog error (continúa con FAQ/LLM):", e);
+    }
+  }
+
+  // ── 2) Firulais 🐕: FAQ determinista antes del LLM ──
   if (lastUser?.content) {
     try {
       const entries = await db.firulaisEntry.findMany({ where: { active: true } });
@@ -59,28 +104,14 @@ export async function POST(req: Request) {
     }
   }
 
-  // Contexto real de la plataforma (catálogo compacto para no saturar el LLM:
-  // un catálogo gigante provoca respuestas vacías/timeout en algunas llamadas)
-  const [providers, settings, cityGroups] = await Promise.all([
-    db.provider.findMany({
-      where: { status: "VERIFIED" },
-      select: {
-        businessName: true, zoneName: true, city: true, ratingAvg: true,
-        services: { where: { active: true }, select: { name: true, category: true, priceUsd: true, durationMin: true } },
-      },
-      orderBy: { ratingCount: "desc" },
-      take: 90,
-    }),
-    db.settings.findUnique({ where: { id: "main" } }),
-    db.provider.groupBy({ by: ["city"], where: { status: "VERIFIED" }, _count: { city: true } }),
-  ]);
-
   // Cobertura real: ciudades con al menos un prestador verificado (ordenadas por cantidad)
   const cobertura = [...cityGroups]
     .sort((a, b) => b._count.city - a._count.city)
     .map((c) => `${c.city} (${c._count.city})`)
     .join(", ");
 
+  // Catálogo COMPACTO solo para el prompt del LLM (un catálogo gigante provoca
+  // respuestas vacías/timeout en algunas llamadas)
   const catalog = providers
     .slice(0, 90)
     .map((p) => `${p.businessName} (${p.zoneName}, ${p.city}, ⭐${p.ratingAvg}): ${p.services.map((s) => `${s.name} [${s.category}] $${s.priceUsd}`).join("; ")}`.slice(0, 400))
@@ -91,7 +122,7 @@ export async function POST(req: Request) {
 
 REGLAS ESTRICTAS:
 1. Responde SIEMPRE en español venezolano (como en Guayana), tono cálido, cercano y útil (máximo ~120 palabras). Usa emojis con moderación 🐶. Puedes usar expresiones criollas con moderación: "a la orden", "chamo/chama", "estamos a la orden". Trata al usuario de "tú".
-2. Usa SOLO los precios y prestadores del catálogo real incluido abajo. NUNCA inventes precios, zonas ni prestadores. Los precios están en USD y su equivalente en bolívares a la tasa del día: ${settings?.usdToBs ?? 40} Bs. por USD (ej: $18 ≈ Bs. ${Math.round((settings?.usdToBs ?? 40) * 18)}). Cuando des un precio, muestra ambas monedas.
+2. Usa SOLO los precios y prestadores del catálogo real incluido abajo. NUNCA inventes precios, zonas ni prestadores. Los precios están en USD y su equivalente en bolívares a la tasa del día: ${usdToBs} Bs. por USD (ej: $18 ≈ Bs. ${Math.round(usdToBs * 18)}). Cuando des un precio, muestra ambas monedas.
 3. NO des diagnósticos ni recetes medicamentos ni dosis. Si preguntan por la salud de su mascota, recomienda con empatía agendar una CONSULTA VETERINARIA de la plataforma (categoría Veterinaria 🩺 — hay vets a domicilio en varias ciudades) y ofrece ayuda con pet taxi si es urgencia. Sí puedes dar tips GENERALES de cuidado (alimentación, higiene, paseo, señales de alerta para acudir al vet).
 4. No procesas pagos ni cancelaciones: explica el flujo (el cliente paga con Pago Móvil/transferencia/Zelle/Binance/efectivo, sube la referencia, el admin la concilia) y deriva a soporte humano si el usuario insiste.
 5. Si no sabes algo o piden hablar con una persona, sugiere el botón "Hablar con humano" o el WhatsApp ${SUPPORT_WHATSAPP}.
