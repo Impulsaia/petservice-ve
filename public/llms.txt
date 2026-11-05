@@ -1,0 +1,76 @@
+# PetService VE
+
+> Marketplace venezolano de servicios para mascotas a domicilio. Directorio 100% real: comercios y profesionales verificados manualmente, nada de datos ficticios. Gratis para dueños de mascotas. Precios en USD y bolívares (tasa BCV automática). Atención humana por WhatsApp.
+
+PetService VE (https://petservice-ve.vercel.app) conecta dueños de mascotas con prestadores verificados en toda Venezuela: peluquería canina y felina, veterinaria a domicilio, delivery de alimentos y medicinas, pet sitting, paseos, adiestramiento, pet taxi, spa móvil, refugios y adopción responsable. Los usuarios eligen su ciudad y sector, comparan prestadores con reseñas, reservan en línea y pagan con Pago Móvil, transferencia, Zelle, Binance o efectivo. El mapa usa OpenStreetMap. La búsqueda asistente "Firulais" (IA) entiende pedidos en español como "veterinario para michi en El Roble".
+
+## Categorías de servicio (11)
+
+- Peluquería (grooming): baño y corte a domicilio para perros y gatos
+- Delivery: comida y medicinas para mascotas a domicilio
+- Alimentos: perrarinas y comida para mascotas, incluye productos Empresas Polar
+- Pet Sitting: cuidado de mascotas en tu casa
+- Paseos: dog walking
+- Adiestramiento: obediencia y conducta
+- Pet Taxi: transporte seguro de mascotas
+- Spa Móvil: baño en la puerta de tu casa
+- Veterinaria: consulta, vacunas y más a domicilio
+- Refugios: refugios y rescates de mascotas
+- Adopción: adopción responsable de mascotas
+
+## Ciudades activas (18)
+
+- Puerto Ordaz (Bolívar) — 59 prestadores, ciudad principal
+- Caracas (Distrito Capital) — 45 prestadores
+- Puerto La Cruz (Anzoátegui) — 28 prestadores
+- Maturín (Monagas) — 22 prestadores
+- San Félix (Bolívar) — 15 prestadores
+- El Tigre (Anzoátegui) — 14 prestadores
+- Maracaibo (Zulia) — 13 prestadores
+- Ciudad Bolívar (Bolívar) — 11 prestadores
+- Upata (Bolívar) — 11 prestadores
+- Barquisimeto (Lara) — 10 prestadores
+- Barcelona (Anzoátegui) — 7 prestadores
+- Barinas (Barinas) — 3 prestadores
+- San Cristóbal (Táchira) — 2 prestadores
+- Maracay (Aragua) — en expansión
+- Mérida (Mérida) — en expansión
+- Porlamar (Nueva Esparta) — en expansión
+- Guanare (Portuguesa) — en expansión
+- La Guaira (La Guaira) — en expansión
+
+Total: 244 servicios activos de 244 comercios verificados (noviembre 2025). Cada sector/zona de búsqueda usa coordenadas geográficas reales verificadas.
+
+## Marcas de alimentos para mascotas (Empresas Polar) destacadas en la categoría Alimentos
+
+- SuperCan (perros): gama media, alta proteína y nutrición equilibrada; línea SuperCan Cachorros (0–1 año) y fórmulas para adultos; bolsas de 2 kg, 4 kg y 18 kg
+- Dogourmet (perros): recetas con sabores y aromas especiales
+- Champ's (perros): económico, 18% proteína, sabor a carne, sin colorantes artificiales; saco de 20 kg
+- Don Kat (gatos): 31% proteína, cuidado del corazón, sistema urinario y la piel
+- Oh Mai Gat! (gatos): 32% proteína (triple proteína), extracto de levadura que refuerza la inmunidad, Omega 3 para un pelaje sano; ideal para gatos de interior y exigentes
+
+Los prestadores que venden estas marcas muestran una insignia "Polar" solo con evidencia real de venta.
+
+## Preguntas frecuentes
+
+- ¿Es gratis? Sí, para dueños de mascotas: buscar y reservar es gratis, se paga al prestador el precio acordado.
+- ¿Cómo reservo? Eliges ciudad y sector, buscas (o usas la IA Firulais), comparas prestadores verificados, reservas y registras el pago; el prestador confirma y el seguimiento llega por WhatsApp.
+- ¿Cómo se verifican los prestadores? Revisión manual del comercio, teléfono y redes sociales antes de publicar; solo entonces reciben la insignia "Verificado".
+- ¿Cómo registro mi negocio? Por WhatsApp o correo (gratuito): verificación del comercio, panel de reservas y CRM de clientes incluidos.
+
+## Contacto
+
+- WhatsApp: +58 424 9526402 (lunes a sábado, 8:00 a.m. – 6:00 p.m., hora Venezuela)
+- Correo: impulsaia@gmail.com
+- Sitio: https://petservice-ve.vercel.app
+
+## Datos abiertos (API pública, sin clave)
+
+- GET https://petservice-ve.vercel.app/api/cities — ciudades activas con coordenadas y número de prestadores
+- GET https://petservice-ve.vercel.app/api/providers?lat=8.2934&lng=-62.7454&radius=8 — prestadores cerca de un punto (radio en km, Haversine); admite q= texto, category=GROOMING|DELIVERY|ALIMENTOS|PET_SITTING|DOG_WALKING|TRAINING|PET_TAXI|SPA_MOVIL|VET|REFUGIO|ADOPCION
+- GET https://petservice-ve.vercel.app/api/sectors?city=Puerto%20Ordaz — sectores de una ciudad
+
+## Enlaces
+
+- [Inicio](https://petservice-ve.vercel.app)
+- [Buscar en el sitio](https://petservice-ve.vercel.app/?q=peluqueria)

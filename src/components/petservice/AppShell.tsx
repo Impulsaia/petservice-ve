@@ -78,8 +78,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   /** Estado (entidad federal) de la ciudad activa — para el breadcrumb del header */
   const [cityState, setCityState] = useState<string | null>(null);
+  /** Total de ciudades activas en la DB (header/footer: cifras SIEMPRE reales) */
+  const [totalCities, setTotalCities] = useState<number | null>(null);
 
-  // Breadcrumb dinámico: "Venezuela · Estado · Ciudad · + 29 ciudades" según donde navega el usuario
+  // Breadcrumb dinámico: "Venezuela · Estado · Ciudad · + N ciudades" según donde navega el usuario
   useEffect(() => {
     let alive = true;
     const apply = (list: { name: string; state: string }[]) => {
@@ -93,6 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     apiGet<{ cities: { name: string; state: string }[] }>("/api/cities")
       .then((d) => {
         citiesCache = d.cities;
+        setTotalCities(d.cities.length);
         apply(d.cities);
       })
       .catch(() => {}); // sin bloquear el header si falla
@@ -147,7 +150,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 PetService <span className="text-accent-foreground rounded-md bg-accent px-1 py-0.5 text-xs font-black">VE</span>
               </span>
               <span className="text-[11px] text-muted-foreground">
-                Venezuela 🇻🇪{cityState ? ` · ${cityState} · ${city}` : ""} · + 29 ciudades 🐾
+                Venezuela 🇻🇪{cityState ? ` · ${cityState} · ${city}` : ""}
+                {totalCities ? ` · + ${Math.max(totalCities - 1, 0)} ciudades` : ""} 🐾
               </span>
             </span>
           </button>
@@ -255,7 +259,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="font-display font-black">PetService VE</span>
             </div>
             <p className="max-w-xs text-sm text-muted-foreground">
-              El marketplace de servicios a domicilio para mascotas en toda Venezuela 🇻🇪. Prestadores verificados (activos hoy en Bolívar, llegando a 29 ciudades). Precios en USD y Bs.
+              El marketplace de servicios a domicilio para mascotas en toda Venezuela 🇻🇪. Comercios reales verificados{totalCities ? ` en ${totalCities} ciudades` : ""}. Precios en USD y Bs.
             </p>
           </div>
           <div className="text-sm">

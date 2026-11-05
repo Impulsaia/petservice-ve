@@ -1,3 +1,10 @@
+# PetService VE — https://petservice-ve.vercel.app
+# Directorio de servicios para mascotas a domicilio en Venezuela
+
+User-agent: *
+Allow: /
+
+# ── Motores de búsqueda ──
 User-agent: Googlebot
 Allow: /
 
@@ -10,5 +17,38 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
+# ── Crawlers de IA / motores generativos (GEO): bienvenidos ──
+User-agent: GPTBot
 Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+Sitemap: https://petservice-ve.vercel.app/sitemap.xml

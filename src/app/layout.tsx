@@ -20,19 +20,90 @@ const nunito = Nunito({
   weight: ["600", "700", "800", "900"],
 });
 
+const SITE_URL = "https://petservice-ve.vercel.app";
+
 export const metadata: Metadata = {
-  title: "PetService VE — Servicios a domicilio para mascotas",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "PetService VE — Servicios para mascotas a domicilio en Venezuela",
+    template: "%s · PetService VE",
+  },
   description:
-    "Marketplace venezolano de peluquería, veterinaria a domicilio, delivery, pet sitting, paseos, adiestramiento y pet taxi. Prestadores verificados, pago en Bs. o USD y atención por WhatsApp.",
-  keywords: ["mascotas", "Venezuela", "grooming", "peluquería canina", "veterinaria a domicilio", "vacunación mascotas", "pet sitting", "delivery", "pet taxi", "estado Bolívar", "Puerto Ordaz", "San Félix"],
+    "Servicios para mascotas a domicilio en toda Venezuela: peluquería, veterinaria, alimentos (SuperCan, Dogourmet, Don Kat), pet sitting, paseos y pet taxi. Comercios reales verificados, pago en Bs. o USD y atención por WhatsApp.",
+  keywords: [
+    "servicios para mascotas Venezuela",
+    "marketplace mascotas Venezuela",
+    "peluquería canina a domicilio",
+    "veterinaria a domicilio Venezuela",
+    "grooming mascotas",
+    "alimentos para perros Venezuela",
+    "alimentos para gatos Venezuela",
+    "perrarinas Venezuela",
+    "SuperCan",
+    "Dogourmet",
+    "Champ's",
+    "Don Kat",
+    "Oh Mai Gat",
+    "Empresas Polar mascotas",
+    "pet sitting Venezuela",
+    "paseos de perros",
+    "adiestramiento canino",
+    "pet taxi",
+    "spa móvil mascotas",
+    "refugios de mascotas",
+    "adopción de mascotas Venezuela",
+    "Puerto Ordaz",
+    "San Félix",
+    "Ciudad Bolívar",
+    "Upata",
+    "Caracas",
+    "Maracaibo",
+    "Barquisimeto",
+    "Maturín",
+    "Puerto La Cruz",
+  ],
+  alternates: {
+    canonical: "/",
+    languages: { "es-VE": "/" },
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   icons: {
     icon: "/favicon.svg",
   },
+  category: "pets",
   openGraph: {
-    title: "PetService VE",
-    description: "Tu mascota feliz en casa: prestadores verificados en toda Venezuela 🐾",
+    title: "PetService VE — Tu mascota feliz, sin salir de casa 🐾",
+    description:
+      "Peluquería, veterinaria, alimentos y más, a domicilio en Venezuela. Comercios reales verificados · Pago en Bs. o USD · Atención por WhatsApp.",
+    url: "/",
     siteName: "PetService VE",
+    locale: "es_VE",
     type: "website",
+    images: [
+      {
+        url: "/og-petservice.jpg",
+        width: 1200,
+        height: 630,
+        alt: "PetService VE — servicios para mascotas a domicilio en Venezuela",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PetService VE — Servicios para mascotas a domicilio en Venezuela",
+    description:
+      "Peluquería, veterinaria, alimentos y más, a domicilio en Venezuela. Comercios reales verificados · Pago en Bs. o USD · WhatsApp.",
+    images: ["/og-petservice.jpg"],
   },
 };
 
