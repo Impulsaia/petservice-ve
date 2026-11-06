@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Nunito } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/petservice/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { SITE_URL } from "@/lib/petservice/constants";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,8 +20,6 @@ const nunito = Nunito({
   subsets: ["latin"],
   weight: ["600", "700", "800", "900"],
 });
-
-const SITE_URL = "https://petservice-ve.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

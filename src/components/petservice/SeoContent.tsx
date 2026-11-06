@@ -1,6 +1,7 @@
 import { db, ensureDbReady } from "@/lib/db";
 import {
   CATEGORIES,
+  SITE_URL,
   SUPPORT_WHATSAPP,
   SUPPORT_WHATSAPP_WA,
   SUPPORT_EMAIL,
@@ -15,8 +16,6 @@ import {
  * nada de cifras inventadas. Si la DB no está disponible (p. ej. durante el
  * build), se usa un respaldo aproximado para no romper la página.
  */
-
-const SITE_URL = "https://petservice-ve.vercel.app";
 
 interface CityStat {
   name: string;

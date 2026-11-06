@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL = "https://petservice-ve.vercel.app";
+import { SITE_URL } from "@/lib/petservice/constants";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [

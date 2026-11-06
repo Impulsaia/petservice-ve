@@ -23,6 +23,7 @@ import { fmtUsd, fmtBs, fmtDateTime, fmtRelative } from "@/lib/petservice/format
 import { Avatar, BookingStatusBadge, PaymentStatusBadge, ProviderStatusBadge, NotifStatusBadge, RatingStars, EmptyState } from "@/components/petservice/shared";
 import { AccountProfileEditor } from "@/components/petservice/account-settings";
 import { ConsultasIA } from "@/components/petservice/ConsultasIA";
+import { SITE_URL } from "@/lib/petservice/constants";
 import {
   UsersSection, ServicesSection, BookingsSection, SectorsSection, FirulaisSection,
   SearchInput, FilterSelect, FilterBar,
@@ -852,7 +853,7 @@ function SettingsForm({ settings, onSaved, onSynced }: {
           </Button>
         )}
         <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/80">
-          Recomendado si usas Google: restringe la clave por <strong>referrer HTTP</strong> (localhost:3000/* y https://petservice-ve.vercel.app/*). La clave viaja al navegador por diseño; la protección real es la restricción de dominio + cuotas.
+          Recomendado si usas Google: restringe la clave por <strong>referrer HTTP</strong> (localhost:3000/* y {`${SITE_URL}/*`}). La clave viaja al navegador por diseño; la protección real es la restricción de dominio + cuotas.
         </p>
       </div>
     </div>

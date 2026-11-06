@@ -3,8 +3,9 @@
  * Uso: bun scripts/geocode-zones.ts → .cache/zones-geocode.json
  */
 import { mkdirSync, writeFileSync } from "node:fs";
+import { SITE_URL } from "../src/lib/petservice/constants";
 
-const UA = "PetServiceVE-Research/1.0 (directorio de negocios de mascotas; contacto: petservice-ve.vercel.app)";
+const UA = `PetServiceVE-Research/1.0 (directorio de negocios de mascotas; contacto: ${SITE_URL})`;
 
 const TARGETS: { id: string; queries: string[] }[] = [
   // Sectores nuevos (ciudad Guayana)

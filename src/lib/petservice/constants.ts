@@ -80,6 +80,18 @@ export const SUPPORT_EMAIL = "impulsaia@gmail.com";
 /** Marca de diseño/desarrollo mostrada en el footer */
 export const CREDIT_BRAND = "Zcreativo";
 
+/**
+ * URL canónica del sitio (único punto de verdad) — la usan layout (metadataBase,
+ * canonical, OG), sitemap, JSON-LD y el panel admin.
+ *
+ * En producción se define como variable de entorno NEXT_PUBLIC_SITE_URL
+ * (Vercel → Settings → Environment Variables). El día del lanzamiento con el
+ * dominio propio SOLO se cambia esa variable: cero cambios de código.
+ * Si no está definida (build local sin .env), se usa el dominio actual de Vercel.
+ */
+export const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://petservice-ve.vercel.app";
+
 export function categoryMeta(key: string): CategoryMeta {
   return CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[0];
 }

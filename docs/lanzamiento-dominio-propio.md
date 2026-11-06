@@ -26,15 +26,22 @@ Todas las apariciones hardcodeadas de `petservice-ve.vercel.app` en el repo:
 **Sin cambios necesarios** (verificado): `src/app/manifest.ts` (todo relativo), enlaces
 `wa.me` (solo números de teléfono), `vercel.json` (solo cron BCV).
 
-**Recomendación previa (se puede hacer antes de comprar el dominio)**: refactorizar las 3
-constantes `SITE_URL` a una sola fuente con variable de entorno:
+> **Actualización Task 41**: los ítems 1, 2, 3, 7 y 8 ya usan la constante `SITE_URL` de
+> `constants.ts`. Quedan para el día del lanzamiento: **4 (robots.txt), 5 (llms.txt) y
+> 6 (regenerar OG image)** — además de definir la variable de entorno en Vercel.
+
+**Recomendación previa — ✅ HECHA (Task 41)**: las 3 constantes `SITE_URL` ya fueron
+refactorizadas a una sola fuente de verdad en `src/lib/petservice/constants.ts`:
 
 ```ts
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://petservice-ve.vercel.app";
+export const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://petservice-ve.vercel.app";
 ```
 
-Así el día del lanzamiento solo se define `NEXT_PUBLIC_SITE_URL` en Vercel → Settings →
-Environment Variables, sin tocar código.
+`layout.tsx`, `sitemap.ts`, `SeoContent.tsx` (JSON-LD), `AdminPanel.tsx` y
+`scripts/geocode-zones.ts` ya importan esa constante. El día del lanzamiento solo se
+define `NEXT_PUBLIC_SITE_URL` en Vercel → Settings → Environment Variables (y en el
+registrar ya no hay que tocar código). Localmente la variable vive en `.env` (gitignored).
 
 ---
 
@@ -64,8 +71,10 @@ Environment Variables, sin tocar código.
 
 ## Fase 2 — Cambiar URLs en el código (una sola vez)
 
-- [ ] Refactor `SITE_URL` a `NEXT_PUBLIC_SITE_URL` (ver recomendación arriba) **o** editar
-  las 3 constantes directamente (`layout.tsx`, `sitemap.ts`, `SeoContent.tsx`).
+- [x] ~~Refactor `SITE_URL` a `NEXT_PUBLIC_SITE_URL`~~ — **✅ hecho en Task 41** (única
+  fuente en `src/lib/petservice/constants.ts` con fallback al dominio Vercel).
+- [ ] El día del lanzamiento: definir `NEXT_PUBLIC_SITE_URL=https://www.NUEVODOMINIO.com`
+  en Vercel → Settings → Environment Variables y redeploy.
 - [ ] Actualizar `public/robots.txt` (comentario + línea `Sitemap:`).
 - [ ] Actualizar `public/llms.txt` (8 referencias — buscar/reemplazar el dominio viejo).
 - [ ] **Regenerar `public/og-petservice.jpg`** con el nuevo dominio en el pill:
