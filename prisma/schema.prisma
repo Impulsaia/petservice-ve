@@ -28,6 +28,8 @@ model User {
   // Un admin puede desactivar una cuenta: bloquea login y sesión sin borrar datos
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
+  // Sincronización multi-instancia (blob): gana la fila con updatedAt más reciente
+  updatedAt    DateTime? @updatedAt
 
   provider       Provider?
   pets           Pet[]
@@ -89,6 +91,9 @@ model Provider {
   // nota legible con el motivo; el admin la limpia al reactivar (status → VERIFIED).
   suspensionNote String?
 
+  // Sincronización multi-instancia (blob): gana la fila con updatedAt más reciente
+  updatedAt    DateTime? @updatedAt
+
   // ── Monetización (Task 42): control de acceso al CRM/Calendario ──
   // FREE | SUBSCRIPTION | COMMISSION
   // - FREE: gestiona servicios, perfil y contraseña; CRM y Calendario bloqueados
@@ -130,6 +135,9 @@ model Service {
   extrasJson  String @default("[]")
   active      Boolean @default(true)
 
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
+
   bookings Booking[]
 }
 
@@ -154,6 +162,9 @@ model Pet {
   photoUrl    String?   // foto de la mascota (data URL redimensionada en el cliente)
   // Notas médicas / historial de atención (vacunas, alergias, tratamientos…)
   medicalNotes String?
+
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
 
   bookings Booking[]
 }
@@ -184,6 +195,8 @@ model Booking {
   evidenceNote String?
 
   createdAt DateTime @default(now())
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
 
   payment Payment?
   review  Review?
@@ -205,6 +218,8 @@ model Payment {
   status    String  @default("PENDIENTE")
   reconciledBy String?
   createdAt DateTime @default(now())
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
 }
 
 // ────────────────────────────── Reseñas ──────────────────────────────
@@ -223,6 +238,8 @@ model Review {
   response   String? // respuesta del prestador
   hidden     Boolean @default(false)
   createdAt  DateTime @default(now())
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
 }
 
 // ─────────────────────── Notificaciones (WhatsApp simulado + in-app) ───────────────────────
@@ -237,6 +254,8 @@ model Notification {
   status    String   @default("ENVIADO")
   createdAt DateTime @default(now())
   readAt    DateTime?
+  // Sincronización multi-instancia (blob): marca de lectura/estado
+  updatedAt DateTime? @updatedAt
 }
 
 // ────────────────────────────── Configuración ──────────────────────────────
@@ -253,6 +272,8 @@ model Settings {
   // Monetización (Task 42): precios editables por el admin que ve el prestador en el upsell
   subscriptionMonthlyUsd Float @default(5)
   adsBoostWeeklyUsd      Float @default(3)
+  // Sincronización multi-instancia (blob): la fila editada más recientemente gana
+  updatedAt DateTime? @updatedAt
 }
 
 // ─────────────────────── Recuperación de contraseña ───────────────────────
@@ -266,6 +287,8 @@ model PasswordReset {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
 }
 
 // ─────────────────────── Geografía: ciudades y sectores ───────────────────────
@@ -277,6 +300,9 @@ model City {
   lat    Float
   lng    Float
   active Boolean @default(true)
+
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
 
   @@unique([name, state])
 }
@@ -291,6 +317,9 @@ model Sector {
   lat      Float?
   lng      Float?
   active   Boolean @default(true)
+
+  // Sincronización multi-instancia (blob)
+  updatedAt DateTime? @updatedAt
 
   @@unique([cityName, name])
 }
@@ -319,7 +348,8 @@ model CrmContact {
   totalSpentUsd  Float   @default(0)
   lastVisitAt    DateTime?
   createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @default(now())
+  // @updatedAt: el cliente Prisma lo mantiene en cada create/update (merge blob)
+  updatedAt      DateTime  @default(now()) @updatedAt
 
   @@index([providerId, userId])
 }
@@ -345,6 +375,8 @@ model CalendarEvent {
   address     String?
   notes       String?
   createdAt   DateTime @default(now())
+  // Sincronización multi-instancia (blob)
+  updatedAt   DateTime? @updatedAt
 
   @@index([providerId, date])
 }
@@ -361,7 +393,8 @@ model FirulaisEntry {
   active    Boolean  @default(true)
   hits      Int      @default(0)
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  // @updatedAt: el cliente Prisma lo mantiene en cada create/update (merge blob)
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 // Log de preguntas NO respondidas por la base de conocimiento (para entrenar)
@@ -371,4 +404,18 @@ model FirulaisLog {
   matched   Boolean  @default(false)
   entryId   String?
   createdAt DateTime @default(now())
+}
+
+// ──────────── Tumbas de borrado (replicación multi-instancia del blob) ────────────
+// Cuando una instancia elimina una fila, deja aquí constancia para que el MERGE
+// entre snapshots de otras instancias no la resucite con "INSERT OR IGNORE".
+// Solo-adjunta (append-only): se replica por unión, jamás se actualiza.
+model DeletedRow {
+  id        String   @id @default(cuid())
+  tableName String // modelo Prisma afectado (User, Pet, Booking, …)
+  rowId     String   // id de la fila eliminada
+  deletedAt DateTime @default(now())
+
+  @@unique([tableName, rowId])
+  @@index([tableName])
 }
