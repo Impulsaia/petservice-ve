@@ -28,6 +28,11 @@ import { mergeCatalogIfNewer } from './petservice/catalogMerge'
  *  3. Tras cada escritura: las rutas llaman after(() => flushDb()) que
  *     primero integra cualquier snapshot ajeno más nuevo (guard anti-pisar)
  *     y luego sube un snapshot consistente (VACUUM INTO) al blob.
+ *  4. MUTEX DEL BLOB: solo UNA instancia sube a la vez (bloqueo con TTL en
+ *     petservice-db.lock). Sin esto, dos snapshots completos publicados casi a
+ *     la vez se pisaban (last-writer-wins a nivel ARCHIVO) y los datos de la
+ *     instancia perdedora desaparecían de las demás: mascotas que no
+ *     persistían, reservas invisibles, cola de conciliación vacía.
  *
  * Semántica del merge (por tabla replicada, ver REPLICATED_TABLES):
  *  - UNION: filas que existen en un lado y no en el otro se insertan
@@ -50,6 +55,11 @@ const DB_PATH = '/tmp/petservice-demo.db'
 const REMOTE_PATH = '/tmp/petservice-remote.db'
 const SNAPSHOT_PATH = '/tmp/petservice-snapshot.db'
 export const BLOB_PATHNAME = 'petservice-db.sqlite'
+export const LOCK_PATHNAME = 'petservice-db.lock'
+/** Si el titular del lock no libera en este tiempo (lambda congelada/crash), otro toma el turno */
+const LOCK_TTL_MS = 45_000
+/** Identidad de ESTA instancia lambda (para saber si el lock es nuestro) */
+const INSTANCE_ID = randomUUID()
 
 const blobToken = process.env.BLOB_READ_WRITE_TOKEN || ''
 const blobEnabled = process.env.VERCEL === '1' && !!blobToken
@@ -142,13 +152,14 @@ async function safeExec(tx: Prisma.TransactionClient, sql: string): Promise<numb
 
 /**
  * Fusiona el snapshot descargado en REMOTE_PATH con la DB local.
- * Devuelve true si la DB local cambió (hay que publicar).
+ * ok: la fusión terminó sin error global (aunque no cambiara nada).
+ * changed: la DB local cambió (hay que publicar).
  */
-async function mergeRemoteIntoLocal(): Promise<boolean> {
-  if (!existsSync(REMOTE_PATH)) return false
+async function mergeRemoteIntoLocal(): Promise<{ ok: boolean; changed: boolean }> {
+  if (!existsSync(REMOTE_PATH)) return { ok: true, changed: false }
   const mdb = getMergeDb()
 
-  const run = async (): Promise<boolean> => {
+  const run = async (): Promise<{ ok: boolean; changed: boolean }> => {
     let changed = false
     // ATTACH fuera de la transacción (SQLite no permite ATTACH/DETACH dentro):
     // con connection_limit=1 todas las sentencias comparten ESTA conexión.
@@ -227,11 +238,11 @@ async function mergeRemoteIntoLocal(): Promise<boolean> {
     } finally {
       try { await mdb.$executeRawUnsafe(`DETACH DATABASE remote`) } catch { /* noop */ }
     }
-    return changed
+    return { ok: true, changed }
   }
 
   // Un merge a la vez en esta instancia; reintento ligero ante SQLITE_BUSY
-  const withMutex = async (): Promise<boolean> => {
+  const withMutex = async (): Promise<{ ok: boolean; changed: boolean }> => {
     if (state.merging) return state.merging
     state.merging = (async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -240,12 +251,12 @@ async function mergeRemoteIntoLocal(): Promise<boolean> {
         } catch (e) {
           if (attempt === 2) {
             console.error('[dbSync] merge falló:', e instanceof Error ? e.message : e)
-            return false
+            return { ok: false, changed: false }
           }
           await new Promise((r) => setTimeout(r, 200 * (attempt + 1)))
         }
       }
-      return false
+      return { ok: false, changed: false }
     })()
     try {
       return await state.merging
@@ -274,6 +285,10 @@ async function listRemoteSnapshot(): Promise<RemoteSnapshot | null> {
 /**
  * Si otra instancia publicó un snapshot más nuevo que el integrado, lo
  * descarga a un archivo temporal y lo FUSIONA (nunca reemplaza la DB local).
+ *
+ * El reloj del blob SOLO avanza si la fusión terminó bien: si falla
+ * (SQLITE_BUSY x3), la próxima request re-descarga y re-intenta en vez de
+ * dar por integrado un snapshot que no se aplicó.
  */
 async function pullRemoteIfNewer(): Promise<boolean> {
   const remote = await listRemoteSnapshot()
@@ -282,13 +297,16 @@ async function pullRemoteIfNewer(): Promise<boolean> {
   if (!res.ok) throw new Error(`blob download ${res.status}`)
   const buf = Buffer.from(await res.arrayBuffer())
   writeAtomic(REMOTE_PATH, buf)
-  const changed = await mergeRemoteIntoLocal()
-  state.lastLoadedAt = remote.uploadedAt
-  if (changed) markDirty() // publicar la fusión (p. ej. filas del arranque)
-  return changed
+  const merge = await mergeRemoteIntoLocal()
+  if (merge.ok) state.lastLoadedAt = remote.uploadedAt
+  if (merge.changed) markDirty() // publicar la fusión (p. ej. filas del arranque)
+  return merge.changed
 }
 
-/** Sube un snapshot consistente al blob si hay cambios locales pendientes */
+/** Sube un snapshot consistente al blob si hay cambios locales pendientes.
+ *  Serializado con un mutex en el blob: si otra instancia está subiendo, esta
+ *  omite la subida (queda dirty y la reintenta la próxima request) — así dos
+ *  snapshots completos NUNCA se publican a la vez y ya no se pisan. */
 export async function flushDb(): Promise<boolean> {
   if (!blobEnabled || !state.dirty) return true
   if (state.flushing) return state.flushing
@@ -301,26 +319,53 @@ export async function flushDb(): Promise<boolean> {
       } catch (e) {
         console.error('[dbSync] pull previo al flush falló:', e instanceof Error ? e.message : e)
       }
-      // VACUUM INTO captura una copia consistente aunque haya escrituras en curso
-      try { unlinkSync(SNAPSHOT_PATH) } catch { /* no existía */ }
-      await db.$executeRawUnsafe(`VACUUM INTO '${SNAPSHOT_PATH}'`)
-      const { put } = await import('@vercel/blob')
-      await put(BLOB_PATHNAME, readFileSync(SNAPSHOT_PATH), {
-        access: 'public',
-        allowOverwrite: true,
-        addRandomSuffix: false,
-      })
-      state.dirty = false
-      // Ancla el reloj al DEL BLOB (no al local): las comparaciones de
-      // uploadedAt son contra el reloj del almacén compartido y un desfase
-      // del reloj de la lambda haría que se ignoren uploads ajenos.
-      try {
-        const own = await listRemoteSnapshot()
-        state.lastLoadedAt = own?.uploadedAt ?? Date.now()
-      } catch {
-        state.lastLoadedAt = Date.now()
+
+      // ── MUTEX del blob: pedir turno antes de subir ──
+      let locked = await acquireLock()
+      if (!locked) {
+        const lock = await readLock()
+        const stale = !lock || Date.now() - (lock.at || 0) > LOCK_TTL_MS
+        if (stale) {
+          // Titular muerto (lambda congelada/crash): tomamos el turno.
+          locked = await takeLockOverwrite()
+          if (locked) console.warn('[dbSync] lock vencido tomado por esta instancia')
+        }
       }
-      return true
+      if (!locked) {
+        // Otra instancia está subiendo AHORA MISMO. Nuestra data sigue local
+        // (dirty) y se publicará en el próximo flush; mientras tanto ya
+        // fusionamos lo ajeno (paso 1), así que la lectura es fresca.
+        return true
+      }
+
+      try {
+        // Re-pull dentro del lock: el titular anterior pudo publicar justo
+        // entre nuestro primer pull y la adquisición del turno.
+        try { await pullRemoteIfNewer() } catch { /* el guard de arriba bastó */ }
+
+        // VACUUM INTO captura una copia consistente aunque haya escrituras en curso
+        try { unlinkSync(SNAPSHOT_PATH) } catch { /* no existía */ }
+        await db.$executeRawUnsafe(`VACUUM INTO '${SNAPSHOT_PATH}'`)
+        const { put } = await import('@vercel/blob')
+        await put(BLOB_PATHNAME, readFileSync(SNAPSHOT_PATH), {
+          access: 'public',
+          allowOverwrite: true,
+          addRandomSuffix: false,
+        })
+        state.dirty = false
+        // Ancla el reloj al DEL BLOB (no al local): las comparaciones de
+        // uploadedAt son contra el reloj del almacén compartido y un desfase
+        // del reloj de la lambda haría que se ignoren uploads ajenos.
+        try {
+          const own = await listRemoteSnapshot()
+          state.lastLoadedAt = own?.uploadedAt ?? Date.now()
+        } catch {
+          state.lastLoadedAt = Date.now()
+        }
+        return true
+      } finally {
+        await releaseLock()
+      }
     } catch (e) {
       // Sin token válido / sin red: dirty queda true y el próximo
       // ensureDbReady reintenta. No romper la request.
@@ -340,10 +385,11 @@ export async function ensureDbReady(): Promise<void> {
   if (now - state.lastCheck < 2000) return
   state.lastCheck = now
   try {
-    if (state.dirty) {
-      const ok = await flushDb()
-      if (!ok) return // NO bajar nada: preserva las escrituras locales aún no publicadas
-    }
+    if (state.dirty) await flushDb() // puede omitir la subida si otra instancia tiene el turno
+    // La fusión es por FILAS (UNION + última escritura gana) y nunca borra
+    // filas locales sin tumba remota: es segura aunque haya escrituras locales
+    // aún sin publicar, y mantiene la lectura fresca aunque el flush omitiera
+    // la subida por el mutex.
     await pullRemoteIfNewer()
   } catch (e) {
     console.error('[dbSync] ensureDbReady falló:', e instanceof Error ? e.message : e)
@@ -361,6 +407,68 @@ export async function mergeSnapshotForDebug(snapshotPath: string): Promise<boole
 
 function markDirty(): void {
   if (blobEnabled) state.dirty = true
+}
+
+// ─────────────────────────── Mutex del blob (turno para subir) ───────────────────────────
+
+interface LockInfo { holder: string; at: number }
+
+async function lockPut(overwrite: boolean): Promise<boolean> {
+  const { put } = await import('@vercel/blob')
+  try {
+    await put(LOCK_PATHNAME, JSON.stringify({ holder: INSTANCE_ID, at: Date.now() } satisfies LockInfo), {
+      access: 'public',
+      allowOverwrite: overwrite,
+      addRandomSuffix: false,
+      contentType: 'application/json',
+    })
+    return true
+  } catch {
+    // Ya existe (titular vivo) o error transitorio: NO es nuestro turno
+    return false
+  }
+}
+
+/** Intenta crear el lock SIN pisar (si existe, falla) */
+function acquireLock(): Promise<boolean> {
+  return lockPut(false)
+}
+
+/** Toma el lock pisando al titular vencido (solo tras TTL) */
+function takeLockOverwrite(): Promise<boolean> {
+  return lockPut(true)
+}
+
+/** Lee el lock actual (o null si no existe). Devuelve la url para poder liberarlo. */
+async function readLock(): Promise<LockInfo | { holder: '?'; at: 0; url: string } | null> {
+  try {
+    const { list } = await import('@vercel/blob')
+    const listing = await list({ prefix: LOCK_PATHNAME, limit: 5 })
+    const blob = listing.blobs.find((b) => b.pathname === LOCK_PATHNAME)
+    if (!blob) return null
+    try {
+      const res = await fetch(blob.url, { cache: 'no-store' })
+      if (!res.ok) return { holder: '?', at: 0, url: blob.url }
+      const j = JSON.parse(await res.text()) as LockInfo
+      return { holder: String(j.holder ?? '?'), at: Number(j.at ?? 0), url: blob.url }
+    } catch {
+      return { holder: '?', at: 0, url: blob.url }
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Libera el turno SOLO si sigue siendo nuestro (el TTL limpia el resto) */
+async function releaseLock(): Promise<void> {
+  try {
+    const lock = await readLock()
+    if (!lock || lock.holder !== INSTANCE_ID) return
+    const { del } = await import('@vercel/blob')
+    await del(lock.url)
+  } catch {
+    // Si no se pudo liberar, el TTL (45 s) permite a otras instancias tomar el turno
+  }
 }
 
 // ─────────────────────────── Tumbas de borrado ───────────────────────────

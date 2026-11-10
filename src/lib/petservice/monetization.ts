@@ -79,6 +79,23 @@ export function adsActive(p: Pick<MonetizationFields, "adsBoostUntil"> | null | 
   return d !== null && d.getTime() > Date.now();
 }
 
+/**
+ * ¿Las reservas de este prestador se cobran por la plataforma (cuentas de
+ * PetService VE + conciliación del admin)? Solo si aceptó el convenio de
+ * comisiones o tiene suscripción activa.
+ *
+ * En CUALQUIER OTRO caso (FREE sin convenio, suscripción vencida) aplica el
+ * flujo de PRERESERVA DIRECTA: el cliente elige solo el TIPO de pago (sin
+ * datos de depósito de la plataforma), la reserva queda confirmada de una vez
+ * y el dinero se acuerda directamente entre dueño y prestador — el admin de
+ * PetService VE NO concilia nada porque no hay dinero de por medio.
+ */
+export function usesPlatformPayments(
+  p: Pick<MonetizationFields, "plan" | "planExpiresAt" | "commissionAcceptedAt"> | null | undefined
+): boolean {
+  return crmUnlocked(p);
+}
+
 /** Etiqueta legible del estado del plan para badges del panel */
 export function planStatusLabel(p: MonetizationFields | null | undefined): string {
   if (!p) return "Gratis";

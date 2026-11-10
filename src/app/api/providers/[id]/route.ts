@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureDbReady } from "@/lib/db";
 import { haversineKm } from "@/lib/petservice/geo";
 import { driveTable } from "@/lib/petservice/routing";
+import { usesPlatformPayments } from "@/lib/petservice/monetization";
 
 /**
  * GET /api/providers/[id] — perfil público completo
@@ -78,6 +79,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       avatarUrl: p.avatarUrl,
       isNew: p.newUntil ? p.newUntil.getTime() > Date.now() : false,
       bookingFlow,
+      // Monetización (solo campos seguros): le dice al wizard si el pago va por
+      // la plataforma (conciliación admin) o es prereserva directa con WhatsApp.
+      monetization: {
+        plan: p.plan,
+        planExpiresAt: p.planExpiresAt,
+        commissionAcceptedAt: p.commissionAcceptedAt,
+        adsBoostUntil: p.adsBoostUntil,
+        usesPlatformPayments: usesPlatformPayments(p),
+      },
       socials: {
         instagram: p.instagram,
         facebook: p.facebook,

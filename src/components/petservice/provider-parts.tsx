@@ -69,7 +69,7 @@ export interface ProviderBookingItem {
   client: { id: string; name: string; phone: string | null };
   service: { id: string; name: string; category: string; durationMin: number };
   pet: { id: string; name: string; species: string; breed: string | null; size: string; medicalNotes?: string | null };
-  payment: { id: string; method: string; status: string; reference: string | null } | null;
+  payment: { id: string; method: string; status: string; reference: string | null; reconciledBy?: string | null } | null;
   review: { id: string; rating: number; comment: string } | null;
 }
 

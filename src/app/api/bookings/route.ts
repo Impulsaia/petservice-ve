@@ -1,7 +1,9 @@
 import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { getSettings, createBookingWithCode, notify, money, upsertCrmFromBooking } from "@/lib/petservice/server";
-import { requireUser, sameOriginOrError, readJson, cleanText } from "@/lib/petservice/auth";
+import { requireUser, sameOriginOrError, readJson, cleanText, jsonError } from "@/lib/petservice/auth";
+import { usesPlatformPayments } from "@/lib/petservice/monetization";
+import { PAYMENT_METHODS } from "@/lib/petservice/constants";
 
 /**
  * GET /api/bookings — reservas del usuario autenticado.
@@ -74,6 +76,8 @@ export async function POST(req: Request) {
   const date = cleanText(body.date, 10);
   const time = cleanText(body.time, 5);
   const extras: string[] = Array.isArray(body.extras) ? body.extras.map(String).slice(0, 10) : [];
+  // Prereserva directa (prestadores FREE/sin convenio): tipo de pago informativo
+  const requestedMethod = body?.paymentMethod ? cleanText(body.paymentMethod, 20).toUpperCase() : null;
 
   if (!providerId || !serviceId || !petId || !address || !date || !time) {
     return NextResponse.json({ error: "Faltan datos de la reserva" }, { status: 400 });
@@ -94,6 +98,25 @@ export async function POST(req: Request) {
   const provider = await db.provider.findUnique({ where: { id: providerId } });
   if (!provider) return NextResponse.json({ error: "Prestador no encontrado" }, { status: 404 });
   if (provider.status !== "VERIFIED") return NextResponse.json({ error: "Este prestador aún no está verificado" }, { status: 400 });
+
+  // ── Flujo de cobro ────────────────────────────────────────────────────────
+  // • Gestionado (convenio de comisión o suscripción): el pago entra por las
+  //   cuentas de PetService VE y el admin lo concilia (status PENDIENTE_PAGO).
+  // • FREE / sin convenio: PRERESERVA DIRECTA — el cliente solo indica el TIPO
+  //   de pago (sin datos de depósito de la plataforma), la reserva queda
+  //   CONFIRMADA de una vez y el dinero se acuerda directo por WhatsApp.
+  //   El admin de PetService VE NO interviene porque no hay dinero suyo.
+  const platformManaged = usesPlatformPayments(provider);
+  const directPrereserva = !platformManaged;
+  let payMethod = "EFECTIVO";
+  if (directPrereserva) {
+    if (requestedMethod) {
+      if (!PAYMENT_METHODS.some((m) => m.key === requestedMethod)) {
+        return jsonError("Método de pago inválido", 400);
+      }
+      payMethod = requestedMethod;
+    }
+  }
 
   // Validación de compatibilidad mascota ↔ servicio
   if (!service.petTypes.split(",").includes(pet.species)) {
@@ -119,13 +142,31 @@ export async function POST(req: Request) {
       petId,
       address,
       scheduledAt: new Date(`${date}T${time}:00.000Z`),
-      status: "PENDIENTE_PAGO",
+      status: directPrereserva ? "CONFIRMADA" : "PENDIENTE_PAGO",
       priceUsd: usd,
       priceBs,
-      commissionUsd,
+      commissionUsd: directPrereserva ? 0 : commissionUsd,
       extrasJson: JSON.stringify(extrasSelected),
       notes: body?.notes ? cleanText(body.notes, 300) : null,
   });
+
+  // Prereserva directa: registra el TIPO de pago acordado como ya tratado entre
+  // las partes (VERIFICADO + AUTO-PRERESERVA: jamás entra a la cola del admin).
+  if (directPrereserva) {
+    await db.payment.upsert({
+      where: { bookingId: booking.id },
+      create: {
+        bookingId: booking.id,
+        method: payMethod,
+        amountUsd: usd,
+        amountBs: priceBs,
+        reference: null,
+        status: "VERIFICADO",
+        reconciledBy: "AUTO-PRERESERVA",
+      },
+      update: { method: payMethod, reference: null, status: "VERIFICADO", reconciledBy: "AUTO-PRERESERVA" },
+    });
+  }
 
   // Auto-hook CRM: la reserva registra/actualiza al contacto del prestador
   // (source RESERVA, totalVisits+1, gasto acumulado, status ACTIVO/VIP)
@@ -143,11 +184,27 @@ export async function POST(req: Request) {
   // Notificaciones WhatsApp simuladas: confirmación de solicitud + recordatorio programado
   // Fecha legible (mié 21 oct) — mediodía UTC evita corrimientos de zona
   const fechaLinda = new Date(`${date}T12:00:00.000Z`).toLocaleDateString("es-VE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-  await notify(
-    auth.id,
-    "CONFIRMACION_RESERVA",
-    `🐾 PetService VE: ¡Hola ${auth.name.split(" ")[0]}! Registramos tu solicitud ${booking.code} (${service.name} para ${pet.name}). ${provider.businessName} te espera el ${fechaLinda} a las ${time}. Completa el pago para confirmar.`
-  );
+  const methodLabel = PAYMENT_METHODS.find((m) => m.key === payMethod)?.label ?? payMethod;
+
+  if (directPrereserva) {
+    await notify(
+      auth.id,
+      "CONFIRMACION_RESERVA",
+      `🐾 PetService VE: ¡Hola ${auth.name.split(" ")[0]}! Tu prereserva ${booking.code} (${service.name} para ${pet.name}) quedó registrada con ${provider.businessName} para el ${fechaLinda} a las ${time}. Pago acordado: ${methodLabel} — directo con el prestador, sin intervención de PetService VE. 🤝`
+    );
+    await notify(
+      provider.userId,
+      "NUEVA_PRERESERVA",
+      `🔔 PetService VE: ¡Nueva prereserva directa! ${auth.name} agendó ${service.name} de ${pet.name} (${booking.code}) para el ${fechaLinda} a las ${time}. 📍 ${address}. Pago acordado: ${methodLabel} — directo con el cliente, sin comisión. Escríbele por WhatsApp para coordinar los detalles. 🐾`,
+      "ENVIADO"
+    );
+  } else {
+    await notify(
+      auth.id,
+      "CONFIRMACION_RESERVA",
+      `🐾 PetService VE: ¡Hola ${auth.name.split(" ")[0]}! Registramos tu solicitud ${booking.code} (${service.name} para ${pet.name}). ${provider.businessName} te espera el ${fechaLinda} a las ${time}. Completa el pago para confirmar.`
+    );
+  }
   await notify(
     auth.id,
     "RECORDATORIO_24H",
@@ -159,5 +216,8 @@ export async function POST(req: Request) {
   // crear la reserva (canal WhatsApp directo prestador↔cliente con relación real).
   const providerUser = await db.user.findUnique({ where: { id: provider.userId }, select: { phone: true } });
 
-  return NextResponse.json({ booking, providerPhone: providerUser?.phone ?? null }, { status: 201 });
+  return NextResponse.json(
+    { booking, providerPhone: providerUser?.phone ?? null, direct: directPrereserva, paymentMethod: directPrereserva ? payMethod : null },
+    { status: 201 }
+  );
 }

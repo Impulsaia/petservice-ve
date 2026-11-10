@@ -23,6 +23,7 @@ interface ServiceFull {
   priceUsd: number; petTypes: string; petSizes: string; extrasJson: string;
 }
 interface PetItem { id: string; name: string; species: string; breed: string | null; size: string; notes: string | null }
+interface MonetizationPublic { usesPlatformPayments: boolean; plan: string | null }
 
 const STEPS = ["Servicio", "Mascota", "Dirección", "Horario", "Pago"];
 
@@ -46,12 +47,20 @@ export function BookingWizard() {
   const [time, setTime] = useState<string | null>(null);
   const [method, setMethod] = useState<string>("PAGO_MOVIL");
   const [reference, setReference] = useState("");
+  // Prereserva directa (prestadores FREE/sin convenio): pago tipo informativo + aviso WhatsApp
+  const [monetization, setMonetization] = useState<MonetizationPublic | null>(null);
+  const [waNotify, setWaNotify] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState<{ code: string; status: string; priceUsd: number; priceBs: number; providerName: string; providerPhone: string | null } | null>(null);
+  const [done, setDone] = useState<{
+    code: string; status: string; priceUsd: number; priceBs: number; providerName: string; providerPhone: string | null;
+    direct: boolean; waMessage: string | null; methodLabel: string | null; waNotify: boolean;
+  } | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [wizardProviderName, setWizardProviderName] = useState("");
 
   const rate = settings?.usdToBs ?? 40;
+  /** Prestador FREE/sin convenio → prereserva directa (pago coordinado entre las partes) */
+  const directFlow = monetization ? !monetization.usesPlatformPayments : false;
 
   // Carga inicial al abrir (con manejo de errores: nunca crashea la app)
   useEffect(() => {
@@ -69,10 +78,11 @@ export function BookingWizard() {
     // Solo clientes pueden reservar: evita llamadas inútiles y 401/403
     if (!user || user.role !== "CLIENT") return;
 
-    apiGet<{ services: ServiceFull[]; provider?: { businessName: string } }>(`/api/providers/${bookingDraft.providerId}`)
+    apiGet<{ services: ServiceFull[]; provider?: { businessName: string; monetization?: MonetizationPublic } }>(`/api/providers/${bookingDraft.providerId}`)
       .then((d) => {
         setServices(d.services);
         setWizardProviderName(d.provider?.businessName ?? "");
+        setMonetization(d.provider?.monetization ?? null);
         const pre = d.services.find((s) => s.id === bookingDraft.serviceId);
         setServiceId(pre?.id ?? d.services[0]?.id ?? null);
       })
@@ -120,35 +130,86 @@ export function BookingWizard() {
 
   async function confirm() {
     if (!bookingDraft || !service || !pet) return;
-    if (methodMeta.needsReference && reference.trim().length < 4) {
+    if (!directFlow && methodMeta.needsReference && reference.trim().length < 4) {
       return toast.error("Ingresa la referencia del pago para poder conciliarlo 🙏");
     }
     setSubmitting(true);
     try {
-      const { booking, providerPhone } = await apiPost<{ booking: { id: string; code: string; status: string; priceUsd: number; priceBs: number }; providerPhone: string | null }>("/api/bookings", {
-        providerId: bookingDraft.providerId,
-        serviceId: service.id,
-        petId: pet.id,
-        address: `${address}, ${zone}`,
-        date,
-        time,
-        extras: extras,
-      });
-      const payRes = await apiPost<{ payment: { status: string }; bookingStatus: string }>("/api/payments", {
-        bookingId: booking.id,
-        method,
-        reference: reference || undefined,
-      });
-      setDone({
-        code: booking.code,
-        status: payRes.bookingStatus,
-        priceUsd: booking.priceUsd,
-        priceBs: booking.priceBs,
-        providerName: wizardProviderName,
-        providerPhone: providerPhone ?? null,
-      });
-      bumpData();
-      toast.success(`¡Reserva ${booking.code} registrada! 🎉`);
+      if (directFlow) {
+        // ── Prereserva directa: UNA sola llamada (queda CONFIRMADA) ──
+        const { booking, providerPhone } = await apiPost<{
+          booking: { id: string; code: string; status: string; priceUsd: number; priceBs: number };
+          providerPhone: string | null; direct: boolean;
+        }>("/api/bookings", {
+          providerId: bookingDraft.providerId,
+          serviceId: service.id,
+          petId: pet.id,
+          address: `${address}, ${zone}`,
+          date,
+          time,
+          extras: extras,
+          direct: true,
+          paymentMethod: method,
+        });
+        const mLabel = PAYMENT_METHODS.find((m) => m.key === method)?.label ?? method;
+        const fechaLinda = new Date(`${date}T12:00:00.000Z`).toLocaleDateString("es-VE", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+        const extrasTxt = extrasList.filter((e) => extras.includes(e.name)).map((e) => e.name).join(" + ");
+        const waMessage = [
+          `Hola ${wizardProviderName}! 🐾 Te agendé por PetService VE:`,
+          ``,
+          `🛎️ Servicio: ${service.name}${extrasTxt ? ` (+ ${extrasTxt})` : ""} — ${booking.code}`,
+          `🐶 Mascota: ${pet.name} (${pet.breed ?? "criollo"} · ${PET_SIZES[pet.size] ?? pet.size})`,
+          `📅 Fecha: ${fechaLinda} a las ${time}`,
+          `📍 Dirección: ${address}, ${zone}`,
+          `👤 Dueño: ${user?.name ?? ""}${user?.phone ? ` · ${user.phone}` : ""}`,
+          `💳 Pago acordado: ${mLabel} (directo contigo)`,
+          ``,
+          `¿Confirmamos la cita? ¡Gracias!`,
+        ].join("\n");
+        setDone({
+          code: booking.code,
+          status: booking.status,
+          priceUsd: booking.priceUsd,
+          priceBs: booking.priceBs,
+          providerName: wizardProviderName,
+          providerPhone: providerPhone ?? null,
+          direct: true,
+          waMessage,
+          methodLabel: mLabel,
+          waNotify,
+        });
+        bumpData();
+        toast.success(`¡Prereserva ${booking.code} confirmada! 🎉`);
+      } else {
+        const { booking, providerPhone } = await apiPost<{ booking: { id: string; code: string; status: string; priceUsd: number; priceBs: number }; providerPhone: string | null }>("/api/bookings", {
+          providerId: bookingDraft.providerId,
+          serviceId: service.id,
+          petId: pet.id,
+          address: `${address}, ${zone}`,
+          date,
+          time,
+          extras: extras,
+        });
+        const payRes = await apiPost<{ payment: { status: string }; bookingStatus: string }>("/api/payments", {
+          bookingId: booking.id,
+          method,
+          reference: reference || undefined,
+        });
+        setDone({
+          code: booking.code,
+          status: payRes.bookingStatus,
+          priceUsd: booking.priceUsd,
+          priceBs: booking.priceBs,
+          providerName: wizardProviderName,
+          providerPhone: providerPhone ?? null,
+          direct: false,
+          waMessage: null,
+          methodLabel: null,
+          waNotify: false,
+        });
+        bumpData();
+        toast.success(`¡Reserva ${booking.code} registrada! 🎉`);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo completar la reserva");
     } finally {
@@ -164,6 +225,7 @@ export function BookingWizard() {
       setPetId(created.id);
       setNewPetOpen(false);
       setNewPet({ name: "", species: "PERRO", size: "S", breed: "" });
+      bumpData(); // el área de cliente (Mis mascotas) también la recibe al refrescar
       toast.success(`${created.name} se unió a la familia 🐾`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error creando mascota");
@@ -243,13 +305,19 @@ export function BookingWizard() {
               <span className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950">
                 <PartyPopper className="h-8 w-8" />
               </span>
-              <DialogTitle className="font-display text-2xl font-black">¡Reserva registrada! 🎉</DialogTitle>
+              <DialogTitle className="font-display text-2xl font-black">
+                {done.direct ? "¡Prereserva confirmada! 🎉" : "¡Reserva registrada! 🎉"}
+              </DialogTitle>
               <DialogDescription className="text-center">
                 Código <strong className="font-mono">{done.code}</strong> · Total {fmtUsd(done.priceUsd)} ({fmtBs(done.priceBs)})
               </DialogDescription>
             </DialogHeader>
 
-            {done.status === "CONFIRMADA" ? (
+            {done.direct ? (
+              <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                ✅ Tu prereserva está <strong>activa</strong> con {done.providerName}. El pago ({done.methodLabel}) lo coordinas <strong>directamente con el prestador</strong> — PetService VE no lo procesa ni cobra comisión. 🤝
+              </div>
+            ) : done.status === "CONFIRMADA" ? (
               <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                 ✅ Pago en efectivo confirmado — tu reserva está <strong>activa</strong>. El prestador cobrará al finalizar.
               </div>
@@ -259,27 +327,75 @@ export function BookingWizard() {
               </div>
             )}
 
-            {/* Preview WhatsApp */}
-            <div className="mt-4 rounded-2xl border border-border/70 bg-[#e7ffdb] p-3 dark:bg-emerald-950/60">
-              <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">📲 Vista previa WhatsApp</div>
-              <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white px-3 py-2 text-xs shadow-sm dark:bg-zinc-800">
-                🐾 <strong>PetService VE:</strong> ¡Hola! Registramos tu solicitud {done.code}. Te enviaremos la confirmación del pago y el recordatorio 24h antes. ¡Gracias por confiar! 💚
-              </div>
-            </div>
-
-            {(() => {
-              const wa = waLink(done.providerPhone, `Hola ${done.providerName}! 👋 Soy cliente de PetService VE, escribo por mi reserva ${done.code}. 🐾`);
-              return wa ? (
-                <a
-                  href={wa}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#1ebe5b]"
-                >
-                  <MessageCircle className="h-4 w-4" /> Chatear ya con {done.providerName} por WhatsApp
-                </a>
-              ) : null;
-            })()}
+            {done.direct && done.waMessage ? (
+              <>
+                {/* Aviso WhatsApp directo: mensaje listo con los datos de la cita */}
+                <div className="mt-4 rounded-2xl border border-border/70 bg-[#e7ffdb] p-3 dark:bg-emerald-950/60">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                    {done.waNotify ? `📲 Mensaje listo para ${done.providerName} — solo presiona enviar` : "📲 Si quieres avisarle tú mismo, este es el mensaje sugerido"}
+                  </div>
+                  <div className="max-w-[95%] whitespace-pre-line rounded-2xl rounded-tl-sm bg-white px-3 py-2 text-xs shadow-sm dark:bg-zinc-800">
+                    {done.waMessage}
+                  </div>
+                </div>
+                {done.waNotify && done.providerPhone ? (
+                  (() => {
+                    const wa = waLink(done.providerPhone, done.waMessage);
+                    return (
+                      <a
+                        href={wa}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#1ebe5b]"
+                      >
+                        <MessageCircle className="h-4 w-4" /> Avisar a {done.providerName} por WhatsApp
+                      </a>
+                    );
+                  })()
+                ) : (
+                  (() => {
+                    const wa = done.providerPhone ? waLink(done.providerPhone, `Hola ${done.providerName}! 👋 Soy cliente de PetService VE, escribo por mi prereserva ${done.code}. 🐾`) : null;
+                    return wa ? (
+                      <a
+                        href={wa}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#1ebe5b]"
+                      >
+                        <MessageCircle className="h-4 w-4" /> Chatear con {done.providerName} por WhatsApp
+                      </a>
+                    ) : (
+                      <p className="mt-3 rounded-xl bg-secondary/60 p-3 text-center text-xs font-semibold text-muted-foreground">
+                        El prestador aún no registró su WhatsApp — te contactará él a ti 📞
+                      </p>
+                    );
+                  })()
+                )}
+              </>
+            ) : (
+              <>
+                {/* Preview WhatsApp (flujo gestionado) */}
+                <div className="mt-4 rounded-2xl border border-border/70 bg-[#e7ffdb] p-3 dark:bg-emerald-950/60">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">📲 Vista previa WhatsApp</div>
+                  <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white px-3 py-2 text-xs shadow-sm dark:bg-zinc-800">
+                    🐾 <strong>PetService VE:</strong> ¡Hola! Registramos tu solicitud {done.code}. Te enviaremos la confirmación del pago y el recordatorio 24h antes. ¡Gracias por confiar! 💚
+                  </div>
+                </div>
+                {(() => {
+                  const wa = waLink(done.providerPhone, `Hola ${done.providerName}! 👋 Soy cliente de PetService VE, escribo por mi reserva ${done.code}. 🐾`);
+                  return wa ? (
+                    <a
+                      href={wa}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#1ebe5b]"
+                    >
+                      <MessageCircle className="h-4 w-4" /> Chatear ya con {done.providerName} por WhatsApp
+                    </a>
+                  ) : null;
+                })()}
+              </>
+            )}
 
             <div className="mt-5 grid grid-cols-2 gap-2">
               <Button variant="outline" className="rounded-xl font-bold" onClick={() => { closeBooking(); setView("client"); }}>
@@ -319,14 +435,14 @@ export function BookingWizard() {
                 {step === 1 && "🐶 ¿A quién consentimos?"}
                 {step === 2 && "📍 ¿Dónde lo atendemos?"}
                 {step === 3 && "🕐 Fecha y hora"}
-                {step === 4 && "💳 Método de pago"}
+                {step === 4 && (directFlow ? "🤝 Pago directo con el prestador" : "💳 Método de pago")}
               </DialogTitle>
               <DialogDescription>
                 {step === 0 && "El servicio y los extras que quieres agregar"}
                 {step === 1 && "Selecciona una de tus mascotas o registra una nueva"}
                 {step === 2 && "Validaremos que estés dentro de la cobertura del prestador"}
                 {step === 3 && "Slots según la agenda del prestador"}
-                {step === 4 && "Pagas como prefieras — en USD o Bs. a tasa del día"}
+                {step === 4 && (directFlow ? "Indica cómo pagarás al prestador — el cobro se coordina directo entre ustedes" : "Pagas como prefieras — en USD o Bs. a tasa del día")}
               </DialogDescription>
             </DialogHeader>
 
@@ -528,6 +644,14 @@ export function BookingWizard() {
             {/* Paso 4: Pago */}
             {step === 4 && (
               <div className="space-y-3">
+                {directFlow ? (
+                  <div className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <strong>Prereserva directa con {wizardProviderName}:</strong> PetService VE no procesa este pago ni muestra cuentas de depósito — el dinero lo acuerdas tú con el prestador. Tu reserva queda confirmada de inmediato. 🤝
+                    </span>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {PAYMENT_METHODS.map((m) => (
                     <button
@@ -541,13 +665,15 @@ export function BookingWizard() {
                       <span className="text-xl">{m.emoji}</span>
                       <span className="min-w-0">
                         <span className="block text-sm font-extrabold">{m.label}</span>
-                        <span className="block text-[11px] leading-snug text-muted-foreground">{m.desc}</span>
+                        <span className="block text-[11px] leading-snug text-muted-foreground">
+                          {directFlow ? (m.key === "EFECTIVO" ? "Al finalizar el servicio, en mano" : "Se lo entregas tú al prestador") : m.desc}
+                        </span>
                       </span>
                     </button>
                   ))}
                 </div>
 
-                {methodMeta.needsReference && (
+                {!directFlow && methodMeta.needsReference && (
                   <div>
                     <Label className="text-xs font-bold">{methodMeta.refLabel}</Label>
                     <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder={methodMeta.placeholder} className="mt-1 rounded-xl font-mono" />
@@ -555,6 +681,15 @@ export function BookingWizard() {
                       Tras transferir, ingresa la referencia. El equipo la concilia (manual/semiautomático) y tu reserva queda confirmada. 💪
                     </p>
                   </div>
+                )}
+
+                {directFlow && (
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl border-2 border-[#25D366]/40 bg-[#25D366]/5 p-3 text-sm font-semibold">
+                    <Checkbox checked={waNotify} onCheckedChange={(v) => setWaNotify(v === true)} className="mt-0.5" />
+                    <span>
+                      📲 Avisar a <strong>{wizardProviderName || "el prestador"}</strong> por WhatsApp que agendé por PetService VE — el mensaje lleva tus datos, los de tu mascota, la fecha/hora del servicio y la dirección.
+                    </span>
+                  </label>
                 )}
 
                 {/* Resumen */}
@@ -569,7 +704,9 @@ export function BookingWizard() {
                   </div>
                   <div className="mt-3 flex items-start gap-1.5 rounded-xl bg-accent/15 p-2.5 text-[11px] font-semibold text-accent-foreground">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    Cancelación: ≥{CANCEL_POLICY.fullRefundHours}h antes = reembolso total · &lt;{CANCEL_POLICY.fullRefundHours}h = {CANCEL_POLICY.partialPct}%. Tu dinero queda en escrow lógico hasta completar el servicio.
+                    {directFlow
+                      ? "Pago directo: el precio final y la forma de cobro se acuerdan con el prestador. Si cancelas, avísale con ≥24h de anticipación por WhatsApp."
+                      : `Cancelación: ≥${CANCEL_POLICY.fullRefundHours}h antes = reembolso total · <${CANCEL_POLICY.fullRefundHours}h = ${CANCEL_POLICY.partialPct}%. Tu dinero queda en escrow lógico hasta completar el servicio.`}
                   </div>
                 </div>
               </div>
@@ -589,9 +726,9 @@ export function BookingWizard() {
                     Continuar <ChevronRight className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button onClick={confirm} disabled={submitting} className="rounded-xl bg-emerald-600 font-bold hover:bg-emerald-600/90">
-                    {submitting ? <PawPrint className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                    {submitting ? "Procesando…" : `Confirmar y pagar`}
+                  <Button onClick={confirm} disabled={submitting} className={cn("rounded-xl font-bold", directFlow ? "bg-[#25D366] hover:bg-[#1ebe5b] text-white" : "bg-emerald-600 hover:bg-emerald-600/90 text-white")}>
+                    {submitting ? <PawPrint className="h-4 w-4 animate-spin" /> : directFlow ? <MessageCircle className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                    {submitting ? "Procesando…" : directFlow ? "Confirmar prereserva" : "Confirmar y pagar"}
                   </Button>
                 )}
               </div>

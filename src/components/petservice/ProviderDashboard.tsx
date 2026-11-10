@@ -1332,6 +1332,9 @@ function BookingCard({ b, rate, busy, compact, onDetail, onStart, onComplete, on
           <span className="text-muted-foreground">· {fmtBs(b.priceBs)} · com. {fmtUsd(b.commissionUsd)}</span>
           {b.payment && <PaymentStatusBadge status={b.payment.status} />}
           {b.payment && <span className="inline-flex items-center gap-1 text-muted-foreground"><Wallet className="h-3.5 w-3.5" />{b.payment.method.replace("_", " ").toLowerCase()}</span>}
+          {b.payment?.reconciledBy === "AUTO-PRERESERVA" && (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-[#25D366]/10 px-2 py-0.5 text-[10px] font-black text-[#128C4A] dark:text-emerald-300" title="Pago coordinado directo entre el cliente y tu negocio — PetService VE no cobra comisión por esta reserva">🤝 Pago directo</span>
+          )}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {(() => {

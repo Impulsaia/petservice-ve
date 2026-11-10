@@ -25,6 +25,8 @@ copyFileSync("db/custom.db", LOCAL);
 {
   const ldb = new Database(LOCAL);
   ldb.exec("DELETE FROM DeletedRow");
+  // escenario f) requiere AMBOS lados sin updatedAt en Settings (empate real)
+  ldb.exec(`UPDATE Settings SET "updatedAt"=NULL`);
   const owner = (ldb.query("SELECT id FROM User LIMIT 1").get() as { id: string }).id;
   // fila que SOLO existe localmente (debe sobrevivir al merge)
   ldb.exec(
@@ -35,7 +37,11 @@ copyFileSync("db/custom.db", LOCAL);
     `INSERT INTO DeletedRow (id, tableName, rowId, deletedAt) VALUES ('tomb-local-1', 'Pet', 'petremote01', 1700000001000)`
   );
   // reverso: local actualiza una reserva MÁS RECIENTE que el remoto
-  const bk2 = (ldb.query("SELECT id FROM Booking ORDER BY id LIMIT 1 OFFSET 5").get() as { id: string }).id;
+  // (una DISTINTA de la primera — robusto aunque la DB tenga pocas reservas)
+  const bk2 = (ldb.query(
+    "SELECT id FROM Booking WHERE id != (SELECT id FROM Booking ORDER BY id LIMIT 1) ORDER BY id LIMIT 1"
+  ).get() as { id: string } | null)?.id;
+  if (!bk2) throw new Error("verify-blob-merge: se necesitan ≥2 reservas en db/custom.db");
   ldb.exec(`UPDATE Booking SET status='CANCELADA', "updatedAt"=1900000300000 WHERE id='${bk2}'`);
   ldb.close();
   globalThis.__bk2 = bk2;
@@ -69,16 +75,16 @@ let bk1 = "", lunaId = "";
       `INSERT INTO DeletedRow (id, tableName, rowId, deletedAt) VALUES ('tomb-remote-2', 'Pet', '${lunaId}', 1700000250000)`
     );
   }
-  // f) Settings sin timestamps en ambos lados → gana el remoto
-  rdb.exec(`UPDATE Settings SET usdToBs=777.77 WHERE id='main'`);
+  // f) Settings sin timestamps en AMBOS lados → gana el remoto
+  rdb.exec(`UPDATE Settings SET usdToBs=777.77, "updatedAt"=NULL WHERE id='main'`);
   rdb.close();
 }
 
 // ── 3) Ejecuta el merge real del módulo ──
 const { mergeSnapshotForDebug } = await import("../src/lib/db");
-const changed = await mergeSnapshotForDebug(REMOTE);
-console.log("mergeSnapshotForDebug → changed:", changed);
-if (!changed) {
+const merge = await mergeSnapshotForDebug(REMOTE);
+console.log("mergeSnapshotForDebug →", merge);
+if (!merge.changed) {
   console.error("❌ El merge reportó 'sin cambios' pero había divergencias");
   process.exit(1);
 }
