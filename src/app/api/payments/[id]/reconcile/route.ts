@@ -28,6 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           service: { select: { name: true } },
           pet: { select: { name: true } },
           client: { select: { id: true, name: true } },
+          provider: { select: { userId: true, businessName: true } },
         },
       },
     },
@@ -44,6 +45,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       payment.booking.clientId,
       "PAGO_VERIFICADO",
       `✅ PetService VE: ¡Pago verificado! Tu reserva ${payment.booking.code} (${payment.booking.service.name} de ${payment.booking.pet.name}) está CONFIRMADA. Monto: Bs. ${payment.amountBs.toFixed(2)} / $${payment.amountUsd.toFixed(2)}.`
+    );
+    // El prestador también enterarse: con el convenio de comisión el dinero lo
+    // cobró la plataforma — el servicio ya puede prestarse con confianza.
+    await notify(
+      payment.booking.provider.userId,
+      "PAGO_VERIFICADO_PRESTADOR",
+      `💰 PetService VE: El pago de ${payment.booking.code} (${payment.booking.service.name} de ${payment.booking.pet.name}) fue verificado por el equipo. ${payment.booking.client.name} ya está confirmado. Monto: $${payment.amountUsd.toFixed(2)}.`
     );
     return NextResponse.json({ ok: true, status: "VERIFICADO" });
   }

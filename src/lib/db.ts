@@ -71,6 +71,11 @@ const state = {
   dirty: false,
   flushing: null as Promise<boolean> | null,
   merging: null as Promise<boolean> | null,
+  // ANTI-WIPE: true si al menos una lectura del blob falló desde el arranque.
+  // Mientras lastLoadedAt === 0 (nunca fusionamos nada) y este flag esté en
+  // true, NO se sube ningún snapshot: subir la demo recién extraída sin haber
+  // podido leer el blob podría pisar los datos reales de producción.
+  pullErrored: false,
 }
 
 /** Tablas replicadas entre instancias. Todas usan PK "id". */
@@ -317,6 +322,7 @@ export async function flushDb(): Promise<boolean> {
       try {
         await pullRemoteIfNewer()
       } catch (e) {
+        state.pullErrored = true // anti-wipe: no subir sin haber leído el blob
         console.error('[dbSync] pull previo al flush falló:', e instanceof Error ? e.message : e)
       }
 
@@ -341,7 +347,18 @@ export async function flushDb(): Promise<boolean> {
       try {
         // Re-pull dentro del lock: el titular anterior pudo publicar justo
         // entre nuestro primer pull y la adquisición del turno.
-        try { await pullRemoteIfNewer() } catch { /* el guard de arriba bastó */ }
+        try { await pullRemoteIfNewer() } catch { state.pullErrored = true /* el guard de abajo basta */ }
+
+        // ── GUARD ANTI-WIPE ──
+        // Si el blob existe pero esta instancia JAMÁS pudo leerlo desde su
+        // arranque (algún pull con error y lastLoadedAt en 0), no subir: el
+        // archivo local podría ser la demo recién extraída sin fusionar y
+        // pisaríamos los datos reales de producción. dirty queda en true y la
+        // próxima request reintenta la subida ya con los datos fusionados.
+        if (state.pullErrored && state.lastLoadedAt === 0) {
+          console.warn('[dbSync] flush OMITIDO (anti-wipe): nunca se pudo leer el blob; no se sube una DB sin fusionar')
+          return false
+        }
 
         // VACUUM INTO captura una copia consistente aunque haya escrituras en curso
         try { unlinkSync(SNAPSHOT_PATH) } catch { /* no existía */ }
@@ -392,6 +409,7 @@ export async function ensureDbReady(): Promise<void> {
     // la subida por el mutex.
     await pullRemoteIfNewer()
   } catch (e) {
+    state.pullErrored = true // anti-wipe
     console.error('[dbSync] ensureDbReady falló:', e instanceof Error ? e.message : e)
   }
 }
@@ -617,9 +635,11 @@ async function ensureSchemaColumns(): Promise<void> {
       `CREATE INDEX IF NOT EXISTS "DeletedRow_tableName_idx" ON "DeletedRow"("tableName")`
     )
     if (changed) {
-      // Publica el cambio de esquema al blob compartido para las demás instancias
+      // Solo marca dirty: la subida ÚNICA ocurre al final del arranque
+      // (initDatabaseFile) DESPUÉS de fusionar el blob compartido. Subir aquí
+      // —antes de la fusión— publicaría la demo recién extraída y pisaría los
+      // datos reales de producción si la lectura del blob fallara.
       markDirty()
-      await flushDb()
     }
   } catch (e) {
     console.error('[db] ensureSchemaColumns falló:', e instanceof Error ? e.message : e)
@@ -630,12 +650,16 @@ async function ensureSchemaColumns(): Promise<void> {
  * Arranque en frío: prepara la DB desde la demo embebida + el blob compartido
  * y ejecuta la fusión de catálogo si el deploy trae datos nuevos.
  *
- * Orden deliberado:
+ * Orden deliberado (ANTI-WIPE: NUNCA subir antes de fusionar):
  *  1. Archivo local base (demo embebida si falta) — NUNCA se pisa con el blob.
  *  2. Columnas/tablas nuevas en el archivo local (el merge las necesita).
+ *     Solo marca dirty — jamás sube aquí.
  *  3. Fusión del snapshot más reciente del blob (los datos reales mandan).
  *  4. Fusión de catálogo del deploy (sube datos nuevos del deploy SIN tocar
  *     usuarios, claves, reservas ni negocios creados manualmente).
+ *  5. UNA sola subida al final, ya con la demo + blob + catálogo fusionados.
+ *     Con el guard anti-wipe, si la lectura del blob nunca funcionó no se
+ *     sube nada (se reintenta por request) — la demo jamás pisa producción.
  */
 async function initDatabaseFile(): Promise<void> {
   if (process.env.VERCEL !== '1') return
@@ -647,18 +671,20 @@ async function initDatabaseFile(): Promise<void> {
     try {
       await pullRemoteIfNewer()
     } catch (e) {
+      state.pullErrored = true // anti-wipe: el flush final no subirá sin fusión
       console.error('[db] fusión del blob en arranque falló (se reintenta por request):', e instanceof Error ? e.message : e)
     }
   }
 
   try {
-    if (await mergeCatalogIfNewer(db)) {
-      markDirty()
-      await flushDb()
-    }
+    if (await mergeCatalogIfNewer(db)) markDirty()
   } catch (e) {
     console.error('[db] merge de catálogo falló:', e instanceof Error ? e.message : e)
   }
+
+  // ÚNICA subida del arranque: ya con el blob fusionado (o con el guard
+  // anti-wipe activo si la fusión falló — en ese caso no sube nada).
+  if (state.dirty) await flushDb()
 }
 
 // Inicialización ANTES de servir la primera request (el cliente es perezoso:

@@ -15,7 +15,7 @@ export async function GET(req: Request) {
           priceUsd: true,
           priceBs: true,
           client: { select: { name: true } },
-          provider: { select: { businessName: true } },
+          provider: { select: { businessName: true, plan: true, planExpiresAt: true, commissionAcceptedAt: true } },
           service: { select: { name: true } },
         },
       },

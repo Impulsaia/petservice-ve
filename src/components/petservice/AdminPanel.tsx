@@ -32,8 +32,10 @@ interface Metrics {
   gmv: number; commissionRevenue: number; totalBookings: number;
   byStatus: Record<string, number>; pendingPayments: number; conversion: number;
   activeProviders: number;
-  days: { date: string; label: string; count: number }[];
+  days: { date: string; label: string; count: number; free: number; managed: number }[];
   topProviders: { id: string; businessName: string; zoneName: string; ratingAvg: number; gmv: number }[];
+  // Canal FREE vs gestionado (monetización)
+  freeBookings: number; managedBookings: number; freeGmvUsd: number;
 }
 interface ProviderRow {
   id: string; businessName: string; ownerName: string; email: string; phone: string | null;
@@ -48,7 +50,16 @@ interface ProviderRow {
 }
 interface PaymentRow {
   id: string; method: string; status: string; amountUsd: number; amountBs: number; reference: string | null; createdAt: string;
-  booking: { code: string; status: string; client: { name: string }; provider: { businessName: string }; service: { name: string } };
+  booking: { code: string; status: string; client: { name: string }; provider: { businessName: string; plan?: string; planExpiresAt?: string | null; commissionAcceptedAt?: string | null }; service: { name: string } };
+}
+/** Reserva pendiente de pago (sin comprobante) para la sección de conciliación manual */
+interface PendingBookingRow {
+  id: string; code: string; status: string; priceUsd: number; priceBs: number; scheduledAt: string; address: string;
+  client: { name: string };
+  provider: { businessName: string; city: string };
+  service: { name: string };
+  pet: { name: string } | null;
+  payment: { status: string; method: string } | null;
 }
 interface ReviewRow {
   id: string; authorName: string; rating: number; comment: string; tags: string; response: string | null; hidden: boolean; createdAt: string;
@@ -71,6 +82,7 @@ export function AdminPanel() {
   const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [pendingBookings, setPendingBookings] = useState<PendingBookingRow[]>([]);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [notifs, setNotifs] = useState<NotifRow[]>([]);
   const [tab, setTab] = useState("resumen");
@@ -78,6 +90,7 @@ export function AdminPanel() {
   // Detalle de pago (click en la fila) + perfil propio del admin
   const [payDetail, setPayDetail] = useState<PaymentRow | null>(null);
   const [reconBusy, setReconBusy] = useState(false);
+  const [busyBookingId, setBusyBookingId] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
 
   // Filtros de prestadores (estado local, filtrado en cliente)
@@ -97,6 +110,10 @@ export function AdminPanel() {
       .catch(() => setProviders([]))
       .finally(() => setProvidersLoading(false));
     apiGet<{ payments: PaymentRow[] }>("/api/admin/payments").then((d) => setPayments(d.payments)).catch(() => setPayments([]));
+    // Reservas pendientes de pago (para conciliar las que NUNCA registraron comprobante)
+    apiGet<{ bookings: PendingBookingRow[] }>("/api/admin/bookings?status=PENDIENTE_PAGO")
+      .then((d) => setPendingBookings(d.bookings))
+      .catch(() => setPendingBookings([]));
     apiGet<{ reviews: ReviewRow[] }>("/api/admin/reviews").then((d) => setReviews(d.reviews)).catch(() => setReviews([]));
     apiGet<{ notifications: NotifRow[] }>("/api/admin/notifications").then((d) => setNotifs(d.notifications)).catch(() => setNotifs([]));
     // Settings SIEMPRE frescas: el caché del store puede estar desactualizado
@@ -125,6 +142,24 @@ export function AdminPanel() {
       load();
     } finally {
       setReconBusy(false);
+    }
+  }
+
+  /** Confirma/cancela una reserva PENDIENTE_PAGO sin comprobante (conciliación manual) */
+  async function bookingAction(b: PendingBookingRow, action: "confirm" | "cancel") {
+    setBusyBookingId(b.id);
+    try {
+      await apiPost("/api/admin/bookings", { id: b.id, action });
+      toast.success(
+        action === "confirm"
+          ? `Reserva ${b.code} CONFIRMADA ✅ (pago verificado por el admin — cliente y prestador notificados)`
+          : `Reserva ${b.code} cancelada.`
+      );
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error en la acción");
+    } finally {
+      setBusyBookingId(null);
     }
   }
 
@@ -163,6 +198,9 @@ export function AdminPanel() {
 
   // ── Derivados ──
   const pendingPayments = payments.filter((p) => p.status === "PENDIENTE");
+  // Reservas pendientes de pago SIN comprobante registrado (o rechazado): no
+  // aparecen en la cola de pagos y antes quedaban varadas sin acción posible.
+  const sinComprobante = pendingBookings.filter((b) => !b.payment || b.payment.status === "RECHAZADO");
   const pendingVerifications = providers.filter((p) => p.status === "PENDING");
   const maxDay = Math.max(1, ...(metrics?.days.map((d) => d.count) ?? [1]));
   const provCities = useMemo(() => [...new Set(providers.map((p) => p.city))].sort((a, b) => a.localeCompare(b, "es")), [providers]);
@@ -210,10 +248,11 @@ export function AdminPanel() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <KpiCard emoji="💎" label="GMV verificado" value={fmtUsd(metrics?.gmv ?? 0)} sub={`≈ ${fmtBs((metrics?.gmv ?? 0) * (settings?.usdToBs ?? 40))}`} accent="text-primary" />
         <KpiCard emoji="🏦" label="Ingresos por comisión" value={fmtUsd(metrics?.commissionRevenue ?? 0)} sub={`comisión ${(settings?.commissionPct ?? 15).toFixed(0)}%`} accent="text-emerald-600" />
         <KpiCard emoji="📅" label="Reservas totales" value={String(metrics?.totalBookings ?? 0)} sub={`conversión ${metrics?.conversion ?? 0}%`} accent="text-amber-600" />
+        <KpiCard emoji="🤝" label="Prereservas FREE" value={String(metrics?.freeBookings ?? 0)} sub={`GMV directo ${fmtUsd(metrics?.freeGmvUsd ?? 0)} · ${String(metrics?.managedBookings ?? 0)} gestionadas`} accent="text-emerald-500" />
         <KpiCard emoji="⏳" label="Pagos por conciliar" value={String(metrics?.pendingPayments ?? 0)} sub={`${pendingVerifications.length} verificaciones`} accent="text-orange-600" />
         <KpiCard emoji="🏪" label="Prestadores activos" value={String(metrics?.activeProviders ?? 0)} sub={`${providers.length} registrados`} accent="text-teal-600" />
       </div>
@@ -260,20 +299,39 @@ export function AdminPanel() {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
               <h3 className="font-display font-extrabold">📈 Reservas últimos 7 días</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">🟩 FREE (prereserva directa) · 🟦 Gestionadas (comisión / suscripción)</p>
               <div className="mt-4 flex h-44 items-end gap-2">
-                {(metrics?.days ?? []).map((d) => (
-                  <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-1.5">
-                    <span className="text-xs font-black text-muted-foreground">{d.count || ""}</span>
-                    <div
-                      className="w-full rounded-t-lg bg-gradient-to-t from-primary to-emerald-400 transition-all hover:opacity-80"
-                      style={{ height: `${Math.max(8, Math.round((d.count / maxDay) * 120))}px` }}
-                      title={`${d.date}: ${d.count} reservas`}
-                    />
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">{d.label}</span>
-                  </div>
-                ))}
+                {(metrics?.days ?? []).map((d) => {
+                  const freeH = d.free ? Math.max(4, Math.round((d.free / maxDay) * 120)) : 0;
+                  const managedH = d.managed ? Math.max(4, Math.round((d.managed / maxDay) * 120)) : 0;
+                  return (
+                    <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-1.5">
+                      <span className="text-xs font-black text-muted-foreground">{d.count || ""}</span>
+                      {d.count === 0 ? (
+                        <div className="h-2 w-full rounded-t-lg bg-muted/60" />
+                      ) : (
+                        <div
+                          className="flex w-full flex-col justify-end"
+                          style={{ height: `${Math.max(8, freeH + managedH)}px` }}
+                          title={`${d.date}: ${d.free} FREE · ${d.managed} gestionadas`}
+                        >
+                          {d.managed > 0 && (
+                            <div className="w-full rounded-t-lg bg-gradient-to-t from-primary to-emerald-400 transition-all hover:opacity-80" style={{ height: `${managedH}px` }} />
+                          )}
+                          {d.free > 0 && (
+                            <div className={cn("w-full bg-emerald-500 transition-all hover:opacity-80", d.managed === 0 && "rounded-t-lg")} style={{ height: `${freeH}px` }} />
+                          )}
+                        </div>
+                      )}
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground">{d.label}</span>
+                    </div>
+                  );
+                })}
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 font-bold text-secondary-foreground">
+                  🤝 Hoy: {metrics?.days?.[(metrics.days.length ?? 1) - 1]?.free ?? 0} FREE · {metrics?.days?.[(metrics.days.length ?? 1) - 1]?.managed ?? 0} gestionadas
+                </span>
                 {Object.entries(metrics?.byStatus ?? {}).map(([st, n]) => (
                   <span key={st} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 font-bold text-secondary-foreground">
                     <BookingStatusBadge status={st} /> {n}
@@ -431,6 +489,12 @@ export function AdminPanel() {
                     <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
                       <span className="font-mono text-muted-foreground">{p.booking.code}</span>
                       <span>{p.booking.client.name} → {p.booking.provider.businessName}</span>
+                      {p.booking.provider.plan === "COMMISSION" && (
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase text-violet-700 dark:bg-violet-950 dark:text-violet-300">comisión</span>
+                      )}
+                      {p.booking.provider.plan === "SUBSCRIPTION" && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-700 dark:bg-amber-950 dark:text-amber-300">suscripción</span>
+                      )}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="rounded bg-secondary px-1.5 py-0.5 font-bold uppercase">{p.method.replace("_", " ")}</span>
@@ -449,6 +513,52 @@ export function AdminPanel() {
                     </Button>
                     <Button size="sm" disabled={reconBusy} variant="ghost" onClick={() => reconcile(p, "reject")} className="h-8 rounded-lg px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950">
                       <X className="h-3.5 w-3.5" /> Rechazar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Reservas pendientes de pago SIN comprobante: antes quedaban varadas
+              sin aparecer en la cola de pagos. El admin confirma o cancela. */}
+          <div className="mt-5 overflow-hidden rounded-2xl border border-amber-500/40 bg-card shadow-sm">
+            <div className="border-b border-border/70 bg-amber-50 px-4 py-3 dark:bg-amber-950/30">
+              <h3 className="font-display font-extrabold">🧾 Reservas pendientes sin comprobante ({sinComprobante.length})</h3>
+              <p className="text-xs text-muted-foreground">
+                El cliente nunca registró la referencia (o fue rechazada). Si te confirma el pago por WhatsApp, márcala como recibida aquí.
+              </p>
+            </div>
+            <div className="scroll-slim max-h-[420px] divide-y divide-border/60 overflow-y-auto">
+              {sinComprobante.length === 0 && (
+                <div className="p-6"><EmptyState emoji="✅" title="Nada varado" desc="No hay reservas pendientes de pago sin comprobante." /></div>
+              )}
+              {sinComprobante.map((b) => (
+                <div key={b.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                      <span className="font-mono text-muted-foreground">{b.code}</span>
+                      <span>{b.client.name} → {b.provider.businessName}</span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{b.service.name}</span>
+                      <span>🐾 {b.pet?.name ?? "—"}</span>
+                      <span>🗓️ {fmtDateTime(b.scheduledAt)}</span>
+                      {b.payment?.status === "RECHAZADO" && (
+                        <span className="rounded bg-rose-100 px-1.5 py-0.5 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">comprobante rechazado</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-display font-black text-primary">{fmtUsd(b.priceUsd)}</div>
+                    <div className="text-[11px] text-muted-foreground">{fmtBs(b.priceBs)}</div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" disabled={busyBookingId === b.id} onClick={() => bookingAction(b, "confirm")} className="h-8 rounded-lg bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-700">
+                      <Check className="h-3.5 w-3.5" /> Pago recibido
+                    </Button>
+                    <Button size="sm" disabled={busyBookingId === b.id} variant="ghost" onClick={() => bookingAction(b, "cancel")} className="h-8 rounded-lg px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950">
+                      <X className="h-3.5 w-3.5" /> Cancelar
                     </Button>
                   </div>
                 </div>
