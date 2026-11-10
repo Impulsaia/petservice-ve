@@ -12,6 +12,9 @@ export async function GET() {
       ...rateView(s),
       commissionPct: s.commissionPct,
       defaultRadiusKm: s.defaultRadiusKm,
+      // Monetización (Task 42): precios del upsell que ve el prestador
+      subscriptionMonthlyUsd: s.subscriptionMonthlyUsd,
+      adsBoostWeeklyUsd: s.adsBoostWeeklyUsd,
       // Clave de Maps JavaScript API: es pública por diseño (se restringe por referrer en Google Cloud)
       gmapsApiKey: s.gmapsApiKey ?? null,
     },
@@ -47,6 +50,11 @@ export async function PUT(req: Request) {
     ...(rateChanged ? { usdToBsSource: "manual", usdToBsUpdatedAt: new Date() } : {}),
     ...(isFinite(defaultRadiusKm) && defaultRadiusKm > 0 && defaultRadiusKm <= 100 ? { defaultRadiusKm } : {}),
   };
+  // Monetización (Task 42): precios del upsell (opcionales; 0–1000 USD)
+  const subUsd = Number(body?.subscriptionMonthlyUsd);
+  if (isFinite(subUsd) && subUsd >= 0 && subUsd <= 1000) data.subscriptionMonthlyUsd = subUsd;
+  const adsUsd = Number(body?.adsBoostWeeklyUsd);
+  if (isFinite(adsUsd) && adsUsd >= 0 && adsUsd <= 1000) data.adsBoostWeeklyUsd = adsUsd;
   // Toggle de actualización automática BCV
   if (typeof body.autoRate === "boolean") data.autoRate = body.autoRate;
 

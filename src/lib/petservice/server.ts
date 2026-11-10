@@ -1,8 +1,30 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { crmUnlocked } from "./monetization";
 
 /** Utilidades compartidas de negocio para las APIs de PetService */
+
+/**
+ * 403 PLAN_REQUIRED si el plan del prestador no desbloquea CRM/Calendario.
+ * Devuelve null cuando el acceso está permitido. La UI del panel reconoce
+ * `code: "PLAN_REQUIRED"` para mostrar el upsell (convenio/suscripción/destacado).
+ */
+export function planGateError(provider: {
+  plan: string;
+  planExpiresAt: Date | null;
+  commissionAcceptedAt: Date | null;
+}) {
+  if (crmUnlocked(provider)) return null;
+  return NextResponse.json(
+    {
+      error:
+        "Tu plan actual no incluye el CRM de clientes ni el calendario avanzado. Desbloquéalos desde tu panel: acepta el convenio de comisiones, activa una suscripción o solicita destacado.",
+      code: "PLAN_REQUIRED",
+    },
+    { status: 403 }
+  );
+}
 
 export async function getSettings() {
   let s = await db.settings.findUnique({ where: { id: "main" } });

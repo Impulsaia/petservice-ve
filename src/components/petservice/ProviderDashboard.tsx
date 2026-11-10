@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, FilterX,
-  LayoutDashboard, MapPin, MessageCircle, MessageSquareQuote, Pencil, Play, Plus, QrCode, Search,
+  LayoutDashboard, Lock, MapPin, MessageCircle, MessageSquareQuote, Pencil, Play, Plus, QrCode, Search,
   Scissors, Sparkles, Star, Trash2, TrendingUp, Users, Wallet, XCircle,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -46,11 +46,18 @@ import {
   exportContactsCsv, exportContactsVcf,
 } from "@/components/petservice/provider-crm-parts";
 import { AccountProfileEditor, BusinessProfileEditor } from "@/components/petservice/account-settings";
+import { MonetizationGate } from "@/components/petservice/monetization-gate";
+import { crmUnlocked } from "@/lib/petservice/monetization";
 
 interface ProviderInfo {
   id: string; businessName: string; status: string; ratingAvg: number; ratingCount: number; zoneName: string; city: string;
   avatarUrl?: string | null;
   suspensionNote?: string | null;
+  // Monetización (Task 42) — viene en el select de /api/bookings
+  plan?: string;
+  planExpiresAt?: string | null;
+  commissionAcceptedAt?: string | null;
+  adsBoostUntil?: string | null;
 }
 interface ReviewItem {
   id: string; authorName: string; rating: number; comment: string; tags: string; response: string | null; createdAt: string;
@@ -74,6 +81,8 @@ export function ProviderDashboard() {
   const [provider, setProvider] = useState<ProviderInfo | null>(null);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [fatal, setFatal] = useState<string | null>(null);
+  // Monetización: ¿el plan del prestador desbloquea CRM/Calendario? (Task 42)
+  const monUnlocked = crmUnlocked(provider ? { plan: provider.plan ?? "FREE", planExpiresAt: provider.planExpiresAt ?? null, commissionAcceptedAt: provider.commissionAcceptedAt ?? null } : null);
 
   // ── Servicios: filtros y diálogos ──
   const [svcQ, setSvcQ] = useState("");
@@ -157,8 +166,10 @@ export function ProviderDashboard() {
     try {
       const d = await apiGet<{ events: CalEventItem[] }>("/api/calendar/events");
       setEvents(d.events);
-    } catch {
-      toast.error("No se pudo cargar tu agenda");
+    } catch (e) {
+      // 403 PLAN_REQUIRED: la UI ya muestra el gate — no asustar con el toast
+      const st = e instanceof Error ? /→ (\d{3})/.exec(e.message)?.[1] : undefined;
+      if (st !== "403") toast.error("No se pudo cargar tu agenda");
     }
   }, []);
 
@@ -184,8 +195,9 @@ export function ProviderDashboard() {
       const d = await apiGet<{ contacts: ContactItem[]; stats: CrmStats }>(`/api/crm/contacts${qs ? `?${qs}` : ""}`);
       setContacts(d.contacts);
       setCrmStats(d.stats);
-    } catch {
-      toast.error("No se pudo cargar tu CRM");
+    } catch (e) {
+      const st = e instanceof Error ? /→ (\d{3})/.exec(e.message)?.[1] : undefined;
+      if (st !== "403") toast.error("No se pudo cargar tu CRM");
     } finally {
       setCLoading(false);
     }
@@ -197,7 +209,7 @@ export function ProviderDashboard() {
     loadEvents();
     loadProfile();
     // Settings frescas al abrir el panel (la tasa puede cambiar en Config)
-    apiGet<{ settings: { usdToBs: number; commissionPct: number; defaultRadiusKm: number } }>("/api/settings")
+    apiGet<{ settings: { usdToBs: number; commissionPct: number; defaultRadiusKm: number; subscriptionMonthlyUsd?: number; adsBoostWeeklyUsd?: number } }>("/api/settings")
       .then((d) => d.settings && setSettings(d.settings))
       .catch(() => {});
   }, [loadBookings, loadServices, loadEvents, loadProfile, bumpData]);
@@ -507,8 +519,8 @@ export function ProviderDashboard() {
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-secondary p-1.5">
           <TabsTrigger value="resumen" className="shrink-0 gap-1.5 rounded-xl font-bold"><LayoutDashboard className="h-4 w-4" /> Resumen</TabsTrigger>
           <TabsTrigger value="servicios" className="shrink-0 gap-1.5 rounded-xl font-bold"><Scissors className="h-4 w-4" /> Servicios</TabsTrigger>
-          <TabsTrigger value="crm" className="shrink-0 gap-1.5 rounded-xl font-bold"><Users className="h-4 w-4" /> CRM</TabsTrigger>
-          <TabsTrigger value="calendario" className="shrink-0 gap-1.5 rounded-xl font-bold"><CalendarDays className="h-4 w-4" /> Calendario</TabsTrigger>
+          <TabsTrigger value="crm" className="shrink-0 gap-1.5 rounded-xl font-bold"><Users className="h-4 w-4" /> CRM{!monUnlocked && <Lock className="h-3 w-3 text-amber-500" aria-label="CRM bloqueado: requiere plan" />}</TabsTrigger>
+          <TabsTrigger value="calendario" className="shrink-0 gap-1.5 rounded-xl font-bold"><CalendarDays className="h-4 w-4" /> Calendario{!monUnlocked && <Lock className="h-3 w-3 text-amber-500" aria-label="Calendario bloqueado: requiere plan" />}</TabsTrigger>
           <TabsTrigger value="reservas" className="shrink-0 gap-1.5 rounded-xl font-bold"><ClipboardList className="h-4 w-4" /> Reservas</TabsTrigger>
           <TabsTrigger value="resenas" className="shrink-0 gap-1.5 rounded-xl font-bold"><Star className="h-4 w-4" /> Reseñas ({reviews.length})</TabsTrigger>
           <TabsTrigger value="consultas" className="shrink-0 gap-1.5 rounded-xl font-bold"><Sparkles className="h-4 w-4" /> Consultas IA</TabsTrigger>
@@ -523,8 +535,8 @@ export function ProviderDashboard() {
             <Kpi emoji="🔜" label="Próximos 7 días" value={bookings ? String(kpis.en7) : "…"} hint="confirmadas y por pagar" accent="text-orange-600" onClick={() => setTab("calendario")} />
             <Kpi emoji="💰" label="Ingresos completados" value={bookings ? fmtUsd(kpis.ingresos) : "…"} hint={`≈ ${fmtBs(kpis.ingresos * rate)}`} accent="text-primary" onClick={() => setTab("reservas")} />
             <Kpi emoji="⭐" label="Rating promedio" value={(provider?.ratingAvg ?? 0).toFixed(1)} hint={`${provider?.ratingCount ?? 0} reseñas recibidas`} accent="text-amber-600" onClick={() => setTab("resenas")} />
-            <Kpi emoji="🤝" label="Contactos CRM" value={crmStats ? String(crmStats.total) : "…"} hint={`${crmStats?.vip ?? 0} VIP · ${crmStats?.activos ?? 0} activos`} accent="text-violet-600" onClick={() => setTab("crm")} />
-            <Kpi emoji="🔔" label="Próximos eventos" value={events ? String(kpis.proxEventos) : "…"} hint="en tu agenda" accent="text-accent-foreground" onClick={() => setTab("calendario")} />
+            <Kpi emoji="🤝" label="Contactos CRM" value={crmStats ? String(crmStats.total) : monUnlocked === false ? "🔒" : "…"} hint={monUnlocked === false ? "disponible con tu plan" : `${crmStats?.vip ?? 0} VIP · ${crmStats?.activos ?? 0} activos`} accent="text-violet-600" onClick={() => setTab("crm")} />
+            <Kpi emoji="🔔" label="Próximos eventos" value={events ? String(kpis.proxEventos) : monUnlocked === false ? "🔒" : "…"} hint="en tu agenda" accent="text-accent-foreground" onClick={() => setTab("calendario")} />
             <Kpi emoji="✂️" label="Servicios activos" value={services ? String(kpis.activos) : "…"} hint={`${services?.length ?? 0} publicados en total`} accent="text-emerald-600" onClick={() => setTab("servicios")} />
           </div>
 
@@ -612,7 +624,7 @@ export function ProviderDashboard() {
         </TabsContent>
 
         {/* ── CRM Clientes ── */}
-        <TabsContent value="crm" className="mt-4 space-y-4">
+        <TabsContent value="crm" className="mt-4 space-y-4">{monUnlocked ? (<>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-extrabold">🤝 CRM de clientes</h2>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -804,10 +816,19 @@ export function ProviderDashboard() {
               </div>
             </>
           )}
+        </>) : (
+          <MonetizationGate
+            section="crm"
+            pricing={settings ? { commissionPct: settings.commissionPct, subscriptionMonthlyUsd: settings.subscriptionMonthlyUsd ?? 5, adsBoostWeeklyUsd: settings.adsBoostWeeklyUsd ?? 3 } : null}
+            businessName={provider?.businessName ?? ""}
+            rate={rate}
+            onUnlocked={loadProfile}
+          />
+        )}
         </TabsContent>
 
         {/* ── Calendario ── */}
-        <TabsContent value="calendario" className="mt-4 space-y-4">
+        <TabsContent value="calendario" className="mt-4 space-y-4">{monUnlocked ? (<>
           <WeeklyScheduleEditor />
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-0.5 rounded-xl border border-border/70 bg-card p-1 shadow-sm">
@@ -948,6 +969,15 @@ export function ProviderDashboard() {
               </div>
             </SheetContent>
           </Sheet>
+        </>) : (
+          <MonetizationGate
+            section="calendario"
+            pricing={settings ? { commissionPct: settings.commissionPct, subscriptionMonthlyUsd: settings.subscriptionMonthlyUsd ?? 5, adsBoostWeeklyUsd: settings.adsBoostWeeklyUsd ?? 3 } : null}
+            businessName={provider?.businessName ?? ""}
+            rate={rate}
+            onUnlocked={loadProfile}
+          />
+        )}
         </TabsContent>
 
         {/* ── Reservas ── */}

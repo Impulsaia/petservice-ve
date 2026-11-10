@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
-import { getProviderOf } from "@/lib/petservice/server";
+import { getProviderOf, planGateError } from "@/lib/petservice/server";
 
 const EVENT_TYPES = ["MANUAL", "RESERVA", "RECORDATORIO"];
 const EVENT_STATUSES = ["PENDIENTE", "CONFIRMADO", "COMPLETADO", "CANCELADO"];
@@ -19,6 +19,8 @@ export async function GET(req: Request) {
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const { searchParams } = new URL(req.url);
   const from = cleanText(searchParams.get("from"), 10);
@@ -59,6 +61,8 @@ export async function POST(req: Request) {
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const body = await readJson<Record<string, unknown>>(req, 8192);
   if (!body) return jsonError("Solicitud inválida", 400);

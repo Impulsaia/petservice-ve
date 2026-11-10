@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
-import { getProviderOf } from "@/lib/petservice/server";
+import { getProviderOf, planGateError } from "@/lib/petservice/server";
 import { normalizeTagsInput, fetchTagsByProvider, writeTags } from "../contact-tags";
 
 const CONTACT_STATUSES = ["NUEVO", "ACTIVO", "VIP", "INACTIVO"];
@@ -19,6 +19,8 @@ export async function GET(req: Request) {
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const { searchParams } = new URL(req.url);
   const q = cleanText(searchParams.get("q"), 60);
@@ -83,6 +85,8 @@ export async function POST(req: Request) {
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const body = await readJson<Record<string, unknown>>(req, 8192);
   if (!body) return jsonError("Solicitud inválida", 400);

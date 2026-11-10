@@ -201,11 +201,30 @@ await initDatabaseFile()
  */
 async function ensureSchemaColumns(): Promise<void> {
   try {
-    const cols = (await db.$queryRawUnsafe<{ name: string }[]>(
-      `PRAGMA table_info('Provider')`
-    )).map((r) => r.name)
-    if (!cols.includes('suspensionNote')) {
-      await db.$executeRawUnsafe(`ALTER TABLE 'Provider' ADD COLUMN 'suspensionNote' TEXT`)
+    // [tabla, columna, definición SQL] — añadir aquí las columnas nuevas de cada deploy
+    const wanted: [string, string, string][] = [
+      ['Provider', 'suspensionNote', 'TEXT'],
+      // Monetización (Task 42)
+      ['Provider', 'plan', `TEXT NOT NULL DEFAULT 'FREE'`],
+      ['Provider', 'planExpiresAt', 'DATETIME'],
+      ['Provider', 'adsBoostUntil', 'DATETIME'],
+      ['Provider', 'commissionAcceptedAt', 'DATETIME'],
+      ['Provider', 'commissionTermsVersion', 'TEXT'],
+      ['Settings', 'subscriptionMonthlyUsd', 'REAL NOT NULL DEFAULT 5'],
+      ['Settings', 'adsBoostWeeklyUsd', 'REAL NOT NULL DEFAULT 3'],
+    ]
+    let changed = false
+    for (const [table, column, def] of wanted) {
+      const cols = (await db.$queryRawUnsafe<{ name: string }[]>(
+        `PRAGMA table_info('${table}')`
+      )).map((r) => r.name)
+      if (cols.length === 0) continue // tabla no existe aún (no debería pasar)
+      if (!cols.includes(column)) {
+        await db.$executeRawUnsafe(`ALTER TABLE '${table}' ADD COLUMN '${column}' ${def}`)
+        changed = true
+      }
+    }
+    if (changed) {
       // Publica el cambio de esquema al blob compartido para las demás instancias
       markDirty()
       await flushDb()

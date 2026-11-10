@@ -70,6 +70,9 @@ export async function GET(req: Request) {
       // o ficha de Google > 4★ se colocan PRIMERO en la búsqueda por cercanía.
       const topRated = (p.ratingAvg >= 4 && p.ratingCount >= 1) || (p.googleRating != null && p.googleRating > 4);
 
+      // Destacado (publicidad): el prestador paga por aparecer primero hasta adsBoostUntil
+      const featured = p.adsBoostUntil ? p.adsBoostUntil.getTime() > Date.now() : false;
+
       return {
         id: p.id,
         businessName: p.businessName,
@@ -91,6 +94,8 @@ export async function GET(req: Request) {
         // "Nuevo prestador": etiqueta destacada durante 1 mes desde el registro manual
         isNew: p.newUntil ? p.newUntil.getTime() > Date.now() : false,
         topRated,
+        // "Destacado" (publicidad): insignia + prioridad en el orden
+        featured,
         distanceKm,
         driveKm: null as number | null,
         driveMin: null as number | null,
@@ -146,11 +151,11 @@ export async function GET(req: Request) {
         return (b.minPriceUsd ?? -1) - (a.minPriceUsd ?? -1);
       default: {
         // "Más cerca" = menos tiempo de conducción (los usuarios cruzan puentes, no líneas rectas)
-        // con prioridad de posicionamiento para los 4–5★: primero la capa topRated,
-        // y dentro de cada capa se ordena por cercanía real.
+        // con prioridad de posicionamiento: primero los DESTACADOS (pagados), luego la capa
+        // topRated, y dentro de cada capa se ordena por cercanía real.
         const ka = a.driveMin ?? (a.distanceKm != null ? a.distanceKm * 2.2 : 1e9);
         const kb = b.driveMin ?? (b.distanceKm != null ? b.distanceKm * 2.2 : 1e9);
-        return Number(b.topRated) - Number(a.topRated) || ka - kb;
+        return Number(b.featured) - Number(a.featured) || Number(b.topRated) - Number(a.topRated) || ka - kb;
       }
     }
   });

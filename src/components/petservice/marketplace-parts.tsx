@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { PawPrint, Star, Clock, ChevronRight, Navigation, Plus, Minus, Frame, LocateFixed, Sparkles } from "lucide-react";
+import { PawPrint, Star, Clock, ChevronRight, Navigation, Plus, Minus, Frame, LocateFixed, Sparkles, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categoryMeta, CITIES, ZONES, polarBrandLabels } from "@/lib/petservice/constants";
 import { fmtUsd, fmtBs } from "@/lib/petservice/format";
@@ -34,6 +34,8 @@ export interface ProviderListItem {
   avatarUrl?: string | null;
   /** Registro manual reciente (< 1 mes): etiqueta "Nuevo prestador" */
   isNew?: boolean;
+  /** Destacado (publicidad): insignia 📢 + prioridad en el orden de búsqueda */
+  featured?: boolean;
   distanceKm: number | null;
   /** Conducción REAL vía OSRM (null si el router no respondió) */
   driveKm?: number | null;
@@ -85,6 +87,14 @@ export const ProviderCard = memo(function ProviderCard({ p, rate }: { p: Provide
       {isNew && (
         <span title="Prestador registrado recientemente en PetService-VE" className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-500 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
           <Sparkles className="h-3 w-3" /> Nuevo
+        </span>
+      )}
+      {p.featured && (
+        <span title="Prestador destacado: aparece primero en las búsquedas (publicidad)" className={cn(
+          "absolute right-3 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-black text-white shadow-sm",
+          (rank.double || isTop) ? (isNew ? "top-[3.4rem]" : "top-9") : (isNew ? "top-9" : "top-3")
+        )}>
+          <Megaphone className="h-3 w-3" /> Destacado
         </span>
       )}
       {rank.double && (

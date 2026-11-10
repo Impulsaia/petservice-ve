@@ -25,6 +25,12 @@ export async function GET(req: Request) {
       ratingAvg: p.ratingAvg,
       ratingCount: p.ratingCount,
       badges: p.badges,
+      // Monetización (Task 42)
+      plan: p.plan,
+      planExpiresAt: p.planExpiresAt,
+      adsBoostUntil: p.adsBoostUntil,
+      commissionAcceptedAt: p.commissionAcceptedAt,
+      commissionTermsVersion: p.commissionTermsVersion,
       // Nota: los datos del documento NO se exponen aquí; solo se indica que existe
       hasDocument: true,
     })),
@@ -48,6 +54,56 @@ export async function PATCH(req: Request) {
     reactivate: "VERIFIED",
     markPending: "PENDING",
   };
+
+  // ── Monetización (Task 42): plan y destacado ──
+  if (action === "setPlan" || action === "setAdsBoost" || action === "clearAdsBoost") {
+    const provider = await db.provider.findUnique({ where: { id } });
+    if (!provider) return NextResponse.json({ error: "Prestador no encontrado" }, { status: 404 });
+
+    let data: Record<string, string | Date | null> = {};
+    let notifBody = "";
+
+    if (action === "setPlan") {
+      const plan = typeof body.plan === "string" ? body.plan.toUpperCase() : "FREE";
+      if (!["FREE", "SUBSCRIPTION", "COMMISSION"].includes(plan)) {
+        return NextResponse.json({ error: "plan debe ser FREE | SUBSCRIPTION | COMMISSION" }, { status: 400 });
+      }
+      // planExpiresAt: ISO string opcional (solo relevante en SUBSCRIPTION); null = sin vencimiento
+      let expires: Date | null = null;
+      if (typeof body.planExpiresAt === "string" && body.planExpiresAt.trim()) {
+        const d = new Date(body.planExpiresAt);
+        if (!isFinite(d.getTime())) return NextResponse.json({ error: "planExpiresAt inválido (usa ISO yyyy-mm-dd)" }, { status: 400 });
+        expires = d;
+      }
+      data = { plan, planExpiresAt: plan === "SUBSCRIPTION" ? expires : null };
+      notifBody =
+        plan === "FREE"
+          ? `ℹ️ PetService VE: tu plan volvió a GRATIS. El CRM/calendario quedará bloqueado salvo que actives un plan. Tus datos están a salvo.`
+          : plan === "SUBSCRIPTION"
+            ? `💎 PetService VE: ¡Suscripción ACTIVADA${expires ? ` hasta ${expires.toLocaleDateString("es-VE")}` : ""}! Ya puedes usar tu CRM de clientes y calendario sin comisiones por transacción. 🎉`
+            : `🤝 PetService VE: plan por COMISIÓN activado por el admin. Tu CRM y calendario están desbloqueados; el resumen mensual llega por WhatsApp.`;
+    } else if (action === "setAdsBoost") {
+      const days = Number(body.days);
+      if (!Number.isInteger(days) || days < 1 || days > 365) {
+        return NextResponse.json({ error: "days debe ser un entero entre 1 y 365" }, { status: 400 });
+      }
+      // Si ya tiene un boost activo, se extiende desde su fecha actual (no se pierde lo pagado)
+      const base = provider.adsBoostUntil && provider.adsBoostUntil.getTime() > Date.now() ? provider.adsBoostUntil : new Date();
+      const until = new Date(base.getTime() + days * 24 * 3600_000);
+      data = { adsBoostUntil: until };
+      notifBody = `📢 PetService VE: ¡Destacado ACTIVADO hasta ${until.toLocaleDateString("es-VE")}! Aparecerás PRIMERO en las búsquedas de tu zona. 🚀`;
+    } else {
+      data = { adsBoostUntil: null };
+      notifBody = `ℹ️ PetService VE: el destacado de tu ficha fue desactivado. Puedes reactivarlo cuando quieras desde soporte.`;
+    }
+
+    const updated = await db.provider.update({ where: { id }, data });
+    await db.notification.create({
+      data: { userId: updated.userId, channel: "WHATSAPP", template: `MONETIZACION_${action.toUpperCase()}`, body: notifBody, status: "ENVIADO" },
+    });
+    return NextResponse.json({ ok: true, plan: updated.plan, planExpiresAt: updated.planExpiresAt, adsBoostUntil: updated.adsBoostUntil });
+  }
+
   const status = statusMap[action];
   if (!status) return NextResponse.json({ error: "Acción no reconocida" }, { status: 400 });
 

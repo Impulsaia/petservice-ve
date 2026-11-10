@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
-import { getProviderOf } from "@/lib/petservice/server";
+import { getProviderOf, planGateError } from "@/lib/petservice/server";
 
 const EVENT_TYPES = ["MANUAL", "RESERVA", "RECORDATORIO"];
 const EVENT_STATUSES = ["PENDIENTE", "CONFIRMADO", "COMPLETADO", "CANCELADO"];
@@ -22,6 +22,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const { id } = await params;
   const event = await db.calendarEvent.findUnique({ where: { id } });
@@ -96,6 +98,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const { id } = await params;
   const event = await db.calendarEvent.findUnique({ where: { id } });

@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { db, flushDb } from "@/lib/db";
 import { requireRole, sameOriginOrError, readJson, jsonError, cleanText } from "@/lib/petservice/auth";
-import { getProviderOf } from "@/lib/petservice/server";
+import { getProviderOf, planGateError } from "@/lib/petservice/server";
 import { normalizeTagsInput, fetchTagsOf, writeTags } from "../../contact-tags";
 
 const CONTACT_STATUSES = ["NUEVO", "ACTIVO", "VIP", "INACTIVO"];
@@ -18,6 +18,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const { id } = await params;
   const contact = await db.crmContact.findUnique({ where: { id } });
@@ -67,6 +69,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const { id } = await params;
   const contact = await db.crmContact.findUnique({ where: { id } });
@@ -119,6 +123,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const provider = await getProviderOf(auth.id);
   if (!provider) return jsonError("Perfil de prestador no encontrado", 404);
+  const gate = planGateError(provider);
+  if (gate) return gate;
 
   const { id } = await params;
   const contact = await db.crmContact.findUnique({ where: { id } });

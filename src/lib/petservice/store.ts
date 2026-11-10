@@ -29,6 +29,9 @@ export interface AppSettings {
   usdToBsUpdatedAt?: string | null;
   autoRate?: boolean;
   gmapsApiKey?: string | null;
+  // Monetización (Task 42): precios del upsell visible al prestador
+  subscriptionMonthlyUsd?: number;
+  adsBoostWeeklyUsd?: number;
 }
 
 export interface SessionUser {

@@ -12,9 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  BadgeCheck, Wallet, ShieldAlert, MessageSquareQuote, Settings2, TrendingUp, Sparkles,
-  Check, X, Ban, RotateCcw, EyeOff, Eye, Save, Users, Store, CalendarDays, MapPinned,
-  Dog, Zap, RefreshCcw, Landmark, Globe,
+  BadgeCheck, Wallet, ShieldAlert, MessageSquareQuote, Settings2, TrendingUp, Sparkles, Check, X, Ban, RotateCcw, EyeOff, Eye, Save, Users, Store, CalendarDays, MapPinned, Dog, Zap, RefreshCcw, Landmark, Globe, Gem,
 } from "lucide-react";
 import type { AppSettings } from "@/lib/petservice/store";
 import { apiGet, apiPost, apiPatch } from "@/lib/petservice/api";
@@ -23,6 +21,7 @@ import { fmtUsd, fmtBs, fmtDateTime, fmtRelative } from "@/lib/petservice/format
 import { Avatar, BookingStatusBadge, PaymentStatusBadge, ProviderStatusBadge, NotifStatusBadge, RatingStars, EmptyState } from "@/components/petservice/shared";
 import { AccountProfileEditor } from "@/components/petservice/account-settings";
 import { ConsultasIA } from "@/components/petservice/ConsultasIA";
+import { MonetizationDialog } from "@/components/petservice/admin-monetization";
 import { SITE_URL } from "@/lib/petservice/constants";
 import {
   UsersSection, ServicesSection, BookingsSection, SectorsSection, FirulaisSection,
@@ -40,6 +39,12 @@ interface ProviderRow {
   id: string; businessName: string; ownerName: string; email: string; phone: string | null;
   status: string; city: string; zoneName: string; ratingAvg: number; ratingCount: number; badges: string;
   suspensionNote?: string | null;
+  // Monetización (Task 42)
+  plan?: string;
+  planExpiresAt?: string | null;
+  adsBoostUntil?: string | null;
+  commissionAcceptedAt?: string | null;
+  commissionTermsVersion?: string | null;
 }
 interface PaymentRow {
   id: string; method: string; status: string; amountUsd: number; amountBs: number; reference: string | null; createdAt: string;
@@ -82,6 +87,8 @@ export function AdminPanel() {
 
   // Confirmación destructiva de prestador (rechazar / suspender)
   const [providerConfirm, setProviderConfirm] = useState<{ p: ProviderRow; action: string; title: string; desc: string } | null>(null);
+  // Monetización del prestador (Task 42)
+  const [monTarget, setMonTarget] = useState<ProviderRow | null>(null);
 
   const load = useCallback(() => {
     apiGet<Metrics>("/api/admin/metrics").then(setMetrics).catch(() => setMetrics(null));
@@ -94,7 +101,7 @@ export function AdminPanel() {
     apiGet<{ notifications: NotifRow[] }>("/api/admin/notifications").then((d) => setNotifs(d.notifications)).catch(() => setNotifs([]));
     // Settings SIEMPRE frescas: el caché del store puede estar desactualizado
     // (otra sesión/admin pudo cambiar la tasa) y el form de Config pisa valores.
-    apiGet<{ settings: { usdToBs: number; commissionPct: number; defaultRadiusKm: number } }>("/api/settings")
+    apiGet<{ settings: { usdToBs: number; commissionPct: number; defaultRadiusKm: number; subscriptionMonthlyUsd?: number; adsBoostWeeklyUsd?: number } }>("/api/settings")
       .then((d) => d.settings && setSettings(d.settings))
       .catch(() => {});
   }, [setSettings]);
@@ -346,6 +353,9 @@ export function AdminPanel() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => setMonTarget(p)} title="Plan, destacado y convenio de comisiones" className="h-8 rounded-lg px-3 text-xs font-bold text-violet-600">
+                      <Gem className="h-3.5 w-3.5" /> Monetización
+                    </Button>
                     {p.status !== "VERIFIED" && (
                       <Button size="sm" onClick={() => providerAction(p, "verify")} className="h-8 rounded-lg bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-700">
                         <BadgeCheck className="h-3.5 w-3.5" /> Verificar
@@ -553,7 +563,7 @@ export function AdminPanel() {
             {/* key: reinicializa el form cuando cambian las settings guardadas */}
             {settings && (
               <SettingsForm
-                key={`${settings.usdToBs}-${settings.commissionPct}-${String(settings.autoRate)}`}
+                key={`${settings.usdToBs}-${settings.commissionPct}-${String(settings.autoRate)}-${settings.subscriptionMonthlyUsd ?? 5}-${settings.adsBoostWeeklyUsd ?? 3}`}
                 settings={settings}
                 onSaved={(s) => {
                   setSettings(s);
@@ -597,7 +607,12 @@ export function AdminPanel() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Detalle de pago: conciliar desde el click en la fila */}
+      {/* Monetización del prestador (Task 42) */}
+      <MonetizationDialog
+        provider={monTarget ? { id: monTarget.id, businessName: monTarget.businessName, plan: monTarget.plan ?? "FREE", planExpiresAt: monTarget.planExpiresAt ?? null, adsBoostUntil: monTarget.adsBoostUntil ?? null, commissionAcceptedAt: monTarget.commissionAcceptedAt ?? null, commissionTermsVersion: monTarget.commissionTermsVersion ?? null } : null}
+        onClose={() => setMonTarget(null)}
+        onSaved={load}
+      />
       <Dialog open={!!payDetail} onOpenChange={(o) => !o && setPayDetail(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl sm:max-w-md">
           <DialogHeader>
@@ -652,11 +667,17 @@ export function AdminPanel() {
   );
 }
 
-async function apiPutSettings(usdToBs: number, commissionPct: number, autoRate?: boolean) {
+async function apiPutSettings(usdToBs: number, commissionPct: number, autoRate?: boolean, prices?: { subscriptionMonthlyUsd?: number; adsBoostWeeklyUsd?: number }) {
   const res = await fetch("/api/settings", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ usdToBs, commissionPct, ...(autoRate === undefined ? {} : { autoRate }) }),
+    body: JSON.stringify({
+      usdToBs,
+      commissionPct,
+      ...(autoRate === undefined ? {} : { autoRate }),
+      ...(prices?.subscriptionMonthlyUsd !== undefined && isFinite(prices.subscriptionMonthlyUsd) ? { subscriptionMonthlyUsd: prices.subscriptionMonthlyUsd } : {}),
+      ...(prices?.adsBoostWeeklyUsd !== undefined && isFinite(prices.adsBoostWeeklyUsd) ? { adsBoostWeeklyUsd: prices.adsBoostWeeklyUsd } : {}),
+    }),
   });
   if (!res.ok) throw new Error("Error guardando");
   return res.json() as Promise<{ settings: AppSettings }>;
@@ -692,6 +713,8 @@ function SettingsForm({ settings, onSaved, onSynced }: {
 }) {
   const [rateInput, setRateInput] = useState(String(settings.usdToBs));
   const [commInput, setCommInput] = useState(String(settings.commissionPct));
+  const [subInput, setSubInput] = useState(String(settings.subscriptionMonthlyUsd ?? 5));
+  const [adsInput, setAdsInput] = useState(String(settings.adsBoostWeeklyUsd ?? 3));
   const [autoRate, setAutoRate] = useState(settings.autoRate ?? true);
   const [syncing, setSyncing] = useState(false);
   const [keyInput, setKeyInput] = useState(settings.gmapsApiKey ?? "");
@@ -712,7 +735,7 @@ function SettingsForm({ settings, onSaved, onSynced }: {
 
   async function save() {
     try {
-      const d = await apiPutSettings(Number(rateInput), Number(commInput));
+      const d = await apiPutSettings(Number(rateInput), Number(commInput), undefined, { subscriptionMonthlyUsd: Number(subInput), adsBoostWeeklyUsd: Number(adsInput) });
       onSaved(d.settings);
     } catch {
       toast.error("Valores inválidos");
@@ -765,6 +788,23 @@ function SettingsForm({ settings, onSaved, onSynced }: {
           <div className="mt-1 flex gap-2">
             <Input type="number" step="0.5" value={commInput} onChange={(e) => setCommInput(e.target.value)} className="rounded-xl" />
             <span className="flex items-center text-sm font-bold text-muted-foreground">%</span>
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">Se muestra al prestador en el convenio de comisiones (Task 42).</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs font-bold">Suscripción mensual ($)</Label>
+            <div className="mt-1 flex gap-2">
+              <Input type="number" step="1" min="0" value={subInput} onChange={(e) => setSubInput(e.target.value)} className="rounded-xl" />
+              <span className="flex items-center text-sm font-bold text-muted-foreground">USD</span>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs font-bold">Destacado semanal ($)</Label>
+            <div className="mt-1 flex gap-2">
+              <Input type="number" step="1" min="0" value={adsInput} onChange={(e) => setAdsInput(e.target.value)} className="rounded-xl" />
+              <span className="flex items-center text-sm font-bold text-muted-foreground">USD</span>
+            </div>
           </div>
         </div>
         <Button onClick={save} className="w-full rounded-xl bg-primary font-bold">

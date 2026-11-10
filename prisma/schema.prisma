@@ -89,6 +89,20 @@ model Provider {
   // nota legible con el motivo; el admin la limpia al reactivar (status → VERIFIED).
   suspensionNote String?
 
+  // ── Monetización (Task 42): control de acceso al CRM/Calendario ──
+  // FREE | SUBSCRIPTION | COMMISSION
+  // - FREE: gestiona servicios, perfil y contraseña; CRM y Calendario bloqueados
+  // - SUBSCRIPTION: pago mensual conciliado manualmente por el admin (planExpiresAt)
+  // - COMMISSION: aceptó el convenio de comisión por transacción (self-serve)
+  plan                   String    @default("FREE")
+  // Vencimiento de la suscripción (null = sin vencimiento, decisión del admin)
+  planExpiresAt          DateTime?
+  // Publicidad/posicionamiento: aparece PRIMERO en las búsquedas hasta esta fecha
+  adsBoostUntil          DateTime?
+  // Aceptación del convenio de comisiones (texto versionado en monetization.ts)
+  commissionAcceptedAt   DateTime?
+  commissionTermsVersion String?
+
   services Service[]
   bookings Booking[]
   reviews  Review[]
@@ -236,6 +250,9 @@ model Settings {
   usdToBsUpdatedAt DateTime?
   autoRate         Boolean   @default(true)
   gmapsApiKey      String?
+  // Monetización (Task 42): precios editables por el admin que ve el prestador en el upsell
+  subscriptionMonthlyUsd Float @default(5)
+  adsBoostWeeklyUsd      Float @default(3)
 }
 
 // ─────────────────────── Recuperación de contraseña ───────────────────────
